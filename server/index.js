@@ -18,6 +18,15 @@ app.use((req, res, next) => {
 });
 
 // Endpoint: Search micro-communities
+app.get('/api/debug-env', (req, res) => {
+  res.json({
+    hasClientId: !!process.env.REDDIT_CLIENT_ID,
+    hasClientSecret: !!process.env.REDDIT_CLIENT_SECRET,
+    clientIdLength: process.env.REDDIT_CLIENT_ID ? process.env.REDDIT_CLIENT_ID.length : 0,
+    nodeEnv: process.env.NODE_ENV || 'not set'
+  });
+});
+
 app.get('/api/search', async (req, res) => {
   const query = req.query.q;
   if (!query) {
