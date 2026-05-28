@@ -40,7 +40,14 @@ app.get('/api/test-yahoo', async (req, res) => {
     const count = $('.algo').length;
     res.json({ success: true, count, htmlLength: response.data.length });
   } catch (err) {
-    res.json({ success: false, error: err.message });
+    res.json({ 
+      success: false, 
+      error: err.message, 
+      stack: err.stack,
+      code: err.code,
+      responseStatus: err.response ? err.response.status : null,
+      responseData: err.response ? String(err.response.data).substring(0, 1000) : null
+    });
   }
 });
 
