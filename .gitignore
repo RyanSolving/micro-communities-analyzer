@@ -1,0 +1,31 @@
+# Dependency directories
+node_modules/
+
+# Production build output
+dist/
+
+# Local databases and dynamic user data
+server/data/saved_niches.json
+scratch/
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE and System files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log
+
+# Temp/test scripts
+test_ddg.mjs
+test_search.mjs
+test_yahoo*.mjs
+test_brave*.mjs
+test_mojeek*.mjs
+debug_*.mjs
