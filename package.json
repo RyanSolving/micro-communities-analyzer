@@ -5,6 +5,7 @@
   "main": "server/index.js",
   "type": "module",
   "scripts": {
+    "start": "node server/index.js",
     "server": "npx nodemon server/index.js",
     "client": "npx vite",
     "dev": "npx concurrently \"npm run server\" \"npm run client\"",
