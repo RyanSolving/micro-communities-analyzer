@@ -93,58 +93,116 @@ function identifyPlatform(url) {
 
 // ============================================================
 // 1. Reddit Subreddit Search
+//    Tries the official JSON API first. If it fails (e.g. 403
+//    from datacenter IPs), falls back to DuckDuckGo scraping.
 // ============================================================
 export async function searchReddit(query) {
+  // --- Strategy 1: Reddit JSON API ---
   try {
     const searchUrl = `https://www.reddit.com/subreddits/search.json?q=${encodeURIComponent(query)}&limit=50`;
     const response = await axios.get(searchUrl, {
-      headers: { 'User-Agent': REDDIT_USER_AGENT }
+      headers: { 'User-Agent': REDDIT_USER_AGENT },
+      timeout: 5000
     });
 
-    if (!response.data || !response.data.data || !response.data.data.children) {
-      return [];
+    if (response.data?.data?.children?.length > 0) {
+      const subreddits = response.data.data.children
+        .map(child => {
+          const data = child.data;
+          const name = data.display_name_prefixed || `r/${data.display_name}`;
+          const title = data.title || '';
+          const description = data.public_description || data.description || '';
+          return {
+            id: `reddit-${data.id}`,
+            name,
+            title,
+            platform: 'Reddit',
+            url: `https://www.reddit.com${data.url}`,
+            description,
+            memberCount: data.subscribers || 0,
+            activeCount: data.active_user_count || 0,
+            isNsfw: data.over18 || false,
+            tags: [data.subreddit_type, data.advertiser_category].filter(Boolean),
+            createdAt: new Date(data.created_utc * 1000).toISOString(),
+            monetizationScore: data.advertiser_category ? 'Medium' : 'Low',
+            nicheSpecificity: calculateNicheSpecificity(name, title, description)
+          };
+        })
+        .filter(sub => sub.memberCount <= MAX_MEMBER_THRESHOLD);
+
+      console.log(`  Reddit API returned ${subreddits.length} communities (after filtering)`);
+      return subreddits;
     }
-
-    const subreddits = response.data.data.children
-      .map(child => {
-        const data = child.data;
-        const name = data.display_name_prefixed || `r/${data.display_name}`;
-        const title = data.title || '';
-        const description = data.public_description || data.description || '';
-        return {
-          id: `reddit-${data.id}`,
-          name,
-          title,
-          platform: 'Reddit',
-          url: `https://www.reddit.com${data.url}`,
-          description,
-          memberCount: data.subscribers || 0,
-          activeCount: data.active_user_count || 0,
-          isNsfw: data.over18 || false,
-          tags: [data.subreddit_type, data.advertiser_category].filter(Boolean),
-          createdAt: new Date(data.created_utc * 1000).toISOString(),
-          monetizationScore: data.advertiser_category ? 'Medium' : 'Low',
-          nicheSpecificity: calculateNicheSpecificity(name, title, description)
-        };
-      })
-      .filter(sub => sub.memberCount <= MAX_MEMBER_THRESHOLD);
-
-    return subreddits;
   } catch (error) {
-    console.error('Error fetching from Reddit:', error.message);
+    console.error('  Reddit API failed:', error.message, '— falling back to DuckDuckGo...');
+  }
+
+  // --- Strategy 2: DuckDuckGo fallback for Reddit ---
+  try {
+    console.log(`  Searching Reddit via DuckDuckGo fallback...`);
+    return await searchRedditViaDuckDuckGo(query);
+  } catch (err) {
+    console.error('  DuckDuckGo Reddit fallback also failed:', err.message);
     return [];
   }
 }
 
-// ============================================================
-// 2. Multi-platform search via Mojeek
-//    Mojeek has been the most reliable lightweight HTML source for site-filtered
-//    community discovery after Brave/Yahoo started rate-limiting this backend IP.
-// ============================================================
-const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+// Scrape DuckDuckGo for Reddit subreddit pages when the API is blocked
+async function searchRedditViaDuckDuckGo(query) {
+  const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(`${query} site:reddit.com/r/`)}`;
+  const html = await fetchDuckDuckGoHtml(searchUrl);
+  const $ = cheerio.load(html);
+  const results = [];
+  const seenSubs = new Set();
 
+  $('.web-result').each((index, element) => {
+    const el = $(element);
+    const linkEl = el.find('a.result__a[href]').first();
+    const url = normalizeDuckDuckGoUrl(linkEl.attr('href'));
+    if (!url) return;
+
+    // Only keep subreddit landing pages (reddit.com/r/NAME/)
+    const subredditMatch = url.match(/reddit\.com\/r\/([a-zA-Z0-9_]+)/i);
+    if (!subredditMatch) return;
+
+    const subName = subredditMatch[1];
+    const subKey = subName.toLowerCase();
+    if (seenSubs.has(subKey)) return;
+    seenSubs.add(subKey);
+
+    const title = linkEl.text().replace(/\s+/g, ' ').trim();
+    const description = el.find('.result__snippet').first().text().replace(/\s+/g, ' ').trim();
+    const parsedMembers = parseMemberCount(description) || parseMemberCount(title);
+
+    // Skip if members exceed threshold
+    if (parsedMembers && parsedMembers > MAX_MEMBER_THRESHOLD) return;
+
+    const name = `r/${subName}`;
+    results.push({
+      id: `ddg-reddit-${subKey}-${Date.now()}`,
+      name,
+      title: title || name,
+      platform: 'Reddit',
+      url: `https://www.reddit.com/r/${subName}/`,
+      description: description || `Reddit community for ${query}.`,
+      memberCount: parsedMembers || null,
+      activeCount: null,
+      isNsfw: false,
+      tags: [],
+      createdAt: new Date().toISOString(),
+      monetizationScore: 'Low',
+      nicheSpecificity: calculateNicheSpecificity(name, title, description)
+    });
+  });
+
+  console.log(`  DuckDuckGo Reddit fallback returned ${results.length} communities`);
+  return results;
+}
+
+// ============================================================
+// 2. Multi-platform search via DuckDuckGo + Circle Discovery
+// ============================================================
 export async function searchOtherPlatforms(query) {
-  // Search each target platform separately
   const platformSearches = [
     { siteFilter: 'site:skool.com', defaultPlatform: 'Skool' },
     { siteFilter: 'site:circle.so', defaultPlatform: 'Circle.so' },
@@ -155,13 +213,13 @@ export async function searchOtherPlatforms(query) {
 
   const results = [];
 
-  // Fire all searches in parallel: Mojeek site queries + Circle Discovery
-  const mojeekPromises = platformSearches.map(async (cfg) => {
+  // Fire all searches in parallel: DuckDuckGo site queries + Circle Discovery API
+  const ddgPromises = platformSearches.map(async (cfg) => {
     try {
-      console.log(`  Querying Mojeek for: "${cfg.siteFilter} ${query}"...`);
-      return await searchViaMojeek(query, cfg);
+      console.log(`  Querying DuckDuckGo for: "${cfg.siteFilter} ${query}"...`);
+      return await searchViaDuckDuckGo(query, cfg);
     } catch (err) {
-      console.error(`  Mojeek search for ${cfg.siteFilter} failed:`, err.message);
+      console.error(`  DuckDuckGo search for ${cfg.siteFilter} failed:`, err.message);
       return [];
     }
   });
@@ -176,12 +234,12 @@ export async function searchOtherPlatforms(query) {
     }
   })();
 
-  const allResultsArray = await Promise.all([...mojeekPromises, circlePromise]);
+  const allResultsArray = await Promise.all([...ddgPromises, circlePromise]);
   for (const subResults of allResultsArray) {
     results.push(...subResults);
   }
 
-  // Flatten and deduplicate by normalized URL
+  // Deduplicate by normalized URL
   const seenUrls = new Set();
   const combined = [];
   for (const result of results) {
@@ -331,19 +389,7 @@ async function searchViaCircleDiscovery(query) {
   return results;
 }
 
-function normalizeMojeekUrl(rawUrl) {
-  if (!rawUrl) return null;
-
-  try {
-    const parsed = new URL(rawUrl, 'https://www.mojeek.com');
-    if (parsed.hostname.includes('mojeek.com')) {
-      return parsed.searchParams.get('u') || parsed.searchParams.get('url') || null;
-    }
-    return parsed.href;
-  } catch {
-    return null;
-  }
-}
+// normalizeMojeekUrl removed — Mojeek no longer used
 
 function normalizeDuckDuckGoUrl(rawUrl) {
   if (!rawUrl) return null;
@@ -454,76 +500,7 @@ function matchesQueryIntent(query, ...values) {
   });
 }
 
-// Mojeek scraping uses .results li entries with direct outbound links.
-async function searchViaMojeek(query, { siteFilter, defaultPlatform }) {
-  const searchUrl = `https://www.mojeek.com/search?q=${encodeURIComponent(`${siteFilter} ${query}`)}`;
-
-  const response = await axios.get(searchUrl, {
-    headers: {
-      'User-Agent': BROWSER_USER_AGENT,
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      'Accept-Language': 'en-US,en;q=0.9',
-    },
-    timeout: 2000
-  });
-
-  const $ = cheerio.load(response.data);
-  const results = [];
-
-  $('.results li').each((index, element) => {
-    const el = $(element);
-
-    let linkEl = el.find('h2 a.title[href], h3 a.title[href], a.title[href]').first();
-    if (!linkEl.length) {
-      linkEl = el.find('h2 a[href], h3 a[href], a[href]').first();
-    }
-    const url = normalizeMojeekUrl(linkEl.attr('href'));
-    if (!url || !isLikelyCommunityPage(url)) return;
-
-    const name = linkEl.text().trim();
-    if (!name) return;
-
-    let description = el.find('p.s').first().text().trim();
-    if (!description) {
-      description = el.find('.desc').first().text().trim();
-    }
-    if (!description) {
-      description = el.find('p:not(.i)').first().text().trim();
-    }
-
-    const platform = defaultPlatform || identifyPlatform(url);
-    if (platform === 'Unknown' || platform === 'Web Forum' || platform === 'Reddit') return;
-
-    const parsedMembers = parseMemberCount(description) || parseMemberCount(name);
-    const cleanedName = name.split(/\s(?:-|[|\u00b7\u203a])\s/)[0].trim();
-    if (!matchesQueryIntent(query, cleanedName, name, description, url)) return;
-
-    let monetizationScore = 'Low';
-    if (platform === 'Skool' || platform === 'Circle.so' || platform === 'Mighty Networks') {
-      monetizationScore = 'High';
-    } else if (platform === 'Discord' || platform === 'Facebook Group' || platform === 'Threads') {
-      monetizationScore = 'Medium';
-    }
-
-    results.push({
-      id: `mojeek-${platform}-${index}-${Date.now()}`,
-      name: cleanedName || name,
-      title: name,
-      platform,
-      url,
-      description: description || `${platform} community for ${query}.`,
-      memberCount: parsedMembers || null,
-      activeCount: null,
-      isNsfw: false,
-      tags: [platform],
-      createdAt: new Date().toISOString(),
-      monetizationScore,
-      nicheSpecificity: calculateNicheSpecificity(cleanedName, name, description)
-    });
-  });
-
-  return results;
-}
+// searchViaMojeek removed — Mojeek no longer used
 
 async function searchViaDuckDuckGo(query, { siteFilter, defaultPlatform }) {
   const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(`${query} ${siteFilter}`)}`;

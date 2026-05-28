@@ -24,9 +24,9 @@
   --accent-emerald: #059669;
   
   /* Text Colors */
-  --text-main: #0f172a;
-  --text-muted: #334155;
-  --text-dark: #64748b;
+  --text-main: #000000;
+  --text-muted: #111111;
+  --text-dark: #222222;
 
   /* Platform Colors */
   --color-reddit: #ea4335;
@@ -373,7 +373,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .badge-platform {
-  color: #fff !important;
+  /* Let individual badge rules specify the text color */
 }
 
 .badge-reddit { background: rgba(234, 67, 53, 0.1); border: 1px solid var(--color-reddit); color: #ea4335; }
@@ -534,7 +534,7 @@ h1, h2, h3, h4, h5, h6 {
   flex: 1;
   background: transparent;
   border: none;
-  color: #fff;
+  color: var(--text-main);
   padding: 0.75rem 1rem;
   font-size: 1.05rem;
   outline: none;
@@ -785,7 +785,7 @@ h1, h2, h3, h4, h5, h6 {
 .textarea-glow {
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid var(--border-color);
-  color: #fff;
+  color: var(--text-main);
   border-radius: 8px;
   padding: 0.75rem 1rem;
   font-size: 0.9rem;
