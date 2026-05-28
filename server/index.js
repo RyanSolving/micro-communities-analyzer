@@ -27,6 +27,23 @@ app.get('/api/debug-env', (req, res) => {
   });
 });
 
+app.get('/api/test-yahoo', async (req, res) => {
+  const axios = (await import('axios')).default;
+  const cheerio = await import('cheerio');
+  const searchUrl = `https://search.yahoo.com/search?p=${encodeURIComponent('site:skool.com knitting')}`;
+  try {
+    const response = await axios.get(searchUrl, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' },
+      timeout: 10000
+    });
+    const $ = cheerio.load(response.data);
+    const count = $('.algo').length;
+    res.json({ success: true, count, htmlLength: response.data.length });
+  } catch (err) {
+    res.json({ success: false, error: err.message });
+  }
+});
+
 app.get('/api/search', async (req, res) => {
   const query = req.query.q;
   if (!query) {
