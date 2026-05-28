@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, SlidersHorizontal, Sparkles, AlertCircle, Lightbulb, Zap, Palette, Dumbbell, DollarSign, Cpu, Gamepad2, Utensils, GraduationCap, Heart, Wrench, Compass } from 'lucide-react';
+import { Search, SlidersHorizontal, Sparkles, AlertCircle, Lightbulb, ChevronDown, ChevronUp, Zap, Palette, Dumbbell, DollarSign, Cpu, Gamepad2, Utensils, GraduationCap, Heart, Wrench } from 'lucide-react';
 import CommunityCard from './CommunityCard.jsx';
 import SearchBar from './SearchBar.jsx';
 
@@ -148,8 +148,6 @@ export default function Dashboard({ onAnalyze, onSavedUpdate }) {
   const [results, setResults] = useState([]);
   const [savedUrls, setSavedUrls] = useState([]);
   const [error, setError] = useState('');
-  const [keywordIdeas, setKeywordIdeas] = useState(null);
-  const [ideasLoading, setIdeasLoading] = useState(false);
 
   // Filters state
   const [selectedPlatform, setSelectedPlatform] = useState('All');
@@ -172,22 +170,7 @@ export default function Dashboard({ onAnalyze, onSavedUpdate }) {
 
   useEffect(() => {
     fetchSavedUrls();
-    fetchKeywordIdeas('');
   }, []);
-
-  const fetchKeywordIdeas = async (seed = query) => {
-    setIdeasLoading(true);
-    try {
-      const response = await fetch(`/api/keyword-ideas?seed=${encodeURIComponent(seed || '')}`);
-      if (!response.ok) throw new Error('Keyword idea request failed');
-      const data = await response.json();
-      setKeywordIdeas(data);
-    } catch (e) {
-      console.error('Failed to fetch keyword ideas:', e);
-    } finally {
-      setIdeasLoading(false);
-    }
-  };
 
   const handleSavedUpdate = async (savedCommunity) => {
     if (savedCommunity?.url) {
@@ -250,7 +233,7 @@ export default function Dashboard({ onAnalyze, onSavedUpdate }) {
       <div className="glass-panel" style={{
         position: 'relative',
         overflow: 'hidden',
-        background: 'linear-gradient(135deg, rgba(22, 25, 35, 0.9), rgba(10, 11, 15, 0.95))',
+        background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(240, 243, 250, 0.95))',
         padding: '3rem 2.5rem'
       }}>
         <div style={{ position: 'relative', zIndex: 2 }}>
@@ -271,20 +254,7 @@ export default function Dashboard({ onAnalyze, onSavedUpdate }) {
             maxWidth="800px"
           />
 
-          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '1rem', alignItems: 'center' }}>
-            <button
-              className="btn-secondary"
-              onClick={() => fetchKeywordIdeas(query)}
-              disabled={ideasLoading}
-              style={{ padding: '0.55rem 0.85rem' }}
-            >
-              <Compass size={14} style={{ color: 'var(--accent-primary)' }} />
-              {ideasLoading ? 'Mapping...' : 'Map More Keywords'}
-            </button>
-            <span style={{ color: 'var(--text-dark)', fontSize: '0.82rem' }}>
-              Use a broad seed like yarn, Gameboy, fitness, Excel, or leave it blank.
-            </span>
-          </div>
+
 
           {/* Quick Suggestion Chips */}
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '1.25rem', alignItems: 'center' }}>
@@ -307,61 +277,7 @@ export default function Dashboard({ onAnalyze, onSavedUpdate }) {
         </div>
       </div>
 
-      {keywordIdeas?.groups?.length > 0 && (
-        <section className="glass-panel" style={{
-          padding: '1.25rem',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '1rem',
-          background: 'linear-gradient(135deg, rgba(14, 165, 233, 0.05), rgba(245, 158, 11, 0.04))'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-              <Compass size={20} style={{ color: 'var(--accent-primary)' }} />
-              <div>
-                <h3 style={{ fontSize: '1.05rem', color: '#fff' }}>Keyword Radar</h3>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '0.15rem' }}>
-                  Adjacent vocabulary, pain phrases, and buyer-intent searches you might not think to type.
-                </p>
-              </div>
-            </div>
-          </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem' }}>
-            {keywordIdeas.groups.map((group) => (
-              <div key={group.title} style={{ display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
-                <h4 style={{ color: 'var(--text-muted)', fontSize: '0.82rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  {group.title}
-                </h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  {group.ideas.slice(0, 8).map((idea) => (
-                    <button
-                      key={idea.keyword}
-                      className="btn-secondary"
-                      onClick={() => handleSuggestionClick(idea.keyword)}
-                      disabled={loading}
-                      title={idea.reason}
-                      style={{
-                        justifyContent: 'space-between',
-                        alignItems: 'flex-start',
-                        textAlign: 'left',
-                        padding: '0.65rem 0.75rem',
-                        gap: '0.75rem'
-                      }}
-                    >
-                      <span style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
-                        <span style={{ color: '#fff', fontWeight: 700 }}>{idea.keyword}</span>
-                        <span style={{ color: 'var(--text-dark)', fontSize: '0.75rem', lineHeight: 1.3 }}>{idea.reason}</span>
-                      </span>
-                      <span className="badge" style={{ flexShrink: 0, fontSize: '0.68rem' }}>{idea.type}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
 
       {/* Main Results Workspace */}
       <div className="dashboard-layout" style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: '2rem', alignItems: 'start' }}>
@@ -523,7 +439,7 @@ export default function Dashboard({ onAnalyze, onSavedUpdate }) {
                           {IconComponent && <IconComponent size={16} style={{ color: category.color }} />}
                         </div>
                         <div>
-                          <h4 style={{ fontSize: '0.95rem', color: '#fff', lineHeight: '1.2' }}>{category.name}</h4>
+                          <h4 style={{ fontSize: '0.95rem', color: 'var(--text-main)', lineHeight: '1.2' }}>{category.name}</h4>
                         </div>
                       </div>
                       <p style={{ fontSize: '0.78rem', color: 'var(--text-dark)', marginBottom: '0.75rem', lineHeight: '1.3' }}>

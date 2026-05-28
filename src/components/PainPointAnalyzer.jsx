@@ -126,7 +126,7 @@ export default function PainPointAnalyzer({ initialSubreddit, initialCommunity, 
     <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
       {/* Subreddit Input Section */}
       <div className="glass-panel" style={{
-        background: 'linear-gradient(135deg, rgba(22, 25, 35, 0.9), rgba(10, 11, 15, 0.95))',
+        background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(240, 243, 250, 0.95))',
         padding: '2.5rem'
       }}>
         <h2 style={{ fontSize: '2rem', marginBottom: '0.5rem', fontFamily: 'Outfit', fontWeight: '800' }}>
@@ -144,7 +144,7 @@ export default function PainPointAnalyzer({ initialSubreddit, initialCommunity, 
             <span className={`badge badge-platform badge-${analysisTarget.platform.toLowerCase().replace(/[^a-z0-9]/g, '')}`}>
               {analysisTarget.platform}
             </span>
-            <strong style={{ color: '#fff' }}>{analysisTarget.name}</strong>
+            <strong style={{ color: 'var(--text-main)' }}>{analysisTarget.name}</strong>
             <button
               className="btn-glow"
               onClick={() => handleAnalyzeCommunity(analysisTarget)}
@@ -184,11 +184,11 @@ export default function PainPointAnalyzer({ initialSubreddit, initialCommunity, 
 
         {successMsg && (
           <div style={{
-            background: 'rgba(16, 185, 129, 0.1)',
+            background: 'rgba(16, 185, 129, 0.08)',
             border: '1px solid rgba(16, 185, 129, 0.2)',
             borderRadius: '10px',
             padding: '0.75rem 1rem',
-            color: '#34d399',
+            color: '#059669',
             marginBottom: '1.5rem',
             fontSize: '0.9rem',
             fontWeight: '600'
@@ -198,7 +198,7 @@ export default function PainPointAnalyzer({ initialSubreddit, initialCommunity, 
         )}
 
         {error && (
-          <p style={{ color: '#f87171', padding: '1rem 0' }}>{error}</p>
+          <p style={{ color: '#dc2626', padding: '1rem 0' }}>{error}</p>
         )}
 
         {loading ? (
@@ -260,7 +260,7 @@ export default function PainPointAnalyzer({ initialSubreddit, initialCommunity, 
                   color: 'var(--text-muted)',
                   lineHeight: '1.55',
                   margin: '0.75rem 0',
-                  background: 'rgba(0,0,0,0.15)',
+                  background: 'rgba(0, 0, 0, 0.03)',
                   padding: '0.9rem',
                   borderRadius: '6px',
                   borderLeft: '3px solid var(--accent-primary)',

@@ -29,3 +29,11 @@ test_yahoo*.mjs
 test_brave*.mjs
 test_mojeek*.mjs
 debug_*.mjs
+
+.vercel
+.env*.local
+
+# System/AI artifacts
+Guidelines.md
+antigravity-*.md
+skills.zip

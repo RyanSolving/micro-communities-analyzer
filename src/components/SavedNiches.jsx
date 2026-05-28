@@ -150,10 +150,10 @@ export default function SavedNiches({ onSavedUpdate, onAnalyze }) {
               }}
             >
               <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: '600', fontSize: '0.9rem', color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '180px' }}>
+                <span style={{ fontWeight: '600', fontSize: '0.9rem', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '180px' }}>
                   {n.name}
                 </span>
-                <span style={{ fontSize: '0.7rem', padding: '0.1rem 0.35rem', borderRadius: '4px', background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)' }}>
+                <span style={{ fontSize: '0.7rem', padding: '0.1rem 0.35rem', borderRadius: '4px', background: 'rgba(0,0,0,0.05)', color: 'var(--text-muted)' }}>
                   {n.platform}
                 </span>
               </div>
@@ -182,7 +182,7 @@ export default function SavedNiches({ onSavedUpdate, onAnalyze }) {
                     ${activeNiche.monetizationScore || 'Medium'} Opportunity
                   </span>
                 </div>
-                <h2 style={{ fontSize: '1.75rem', color: '#fff', fontFamily: 'Outfit' }}>
+                <h2 style={{ fontSize: '1.75rem', color: 'var(--text-main)', fontFamily: 'Outfit' }}>
                   {activeNiche.name}
                 </h2>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '0.35rem' }}>
@@ -231,7 +231,7 @@ export default function SavedNiches({ onSavedUpdate, onAnalyze }) {
               
               {/* Research Notes Form */}
               <div className="saved-notes-editor" style={{ border: 'none', padding: 0, margin: 0 }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: '600', fontSize: '1rem', color: '#fff' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: '600', fontSize: '1rem', color: 'var(--text-main)' }}>
                   <BookOpen size={16} style={{ color: 'var(--accent-primary)' }} />
                   Niche Research & Observations
                 </label>
@@ -246,7 +246,7 @@ export default function SavedNiches({ onSavedUpdate, onAnalyze }) {
 
               {/* Monetization Ideas Form */}
               <div className="saved-notes-editor" style={{ border: 'none', padding: 0, margin: 0 }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: '600', fontSize: '1rem', color: '#fff' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: '600', fontSize: '1rem', color: 'var(--text-main)' }}>
                   <DollarSign size={16} style={{ color: 'var(--accent-gold)' }} />
                   Monetization & Product Ideas (One per line)
                 </label>
@@ -286,7 +286,7 @@ export default function SavedNiches({ onSavedUpdate, onAnalyze }) {
               }}>
                 <Sparkles size={20} style={{ color: 'var(--accent-primary)', flexShrink: 0, marginTop: '2px' }} />
                 <div>
-                  <h4 style={{ fontSize: '0.9rem', color: '#fff', marginBottom: '0.25rem' }}>Ideation Tip: How to Sell to this Niche</h4>
+                  <h4 style={{ fontSize: '0.9rem', color: 'var(--text-main)', marginBottom: '0.25rem' }}>Ideation Tip: How to Sell to this Niche</h4>
                   <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: '1.4' }}>
                     Look for repetitive, frustrating tasks that community members complain about. Build a simple software utility, template pack, or high-end service package. If it's a paid platform (Skool/Circle), they already have buying intent; consider offering them micro-consulting or custom integration.
                   </p>

@@ -87,7 +87,7 @@ export default function CommunityCard({ community, onAnalyze, onSavedUpdate, ini
       </div>
 
       {/* Main text content */}
-      <h3 style={{ fontSize: '1.2rem', marginBottom: '0.5rem', color: '#fff', lineHeight: '1.3' }}>
+      <h3 style={{ fontSize: '1.2rem', marginBottom: '0.5rem', color: 'var(--text-main)', lineHeight: '1.3' }}>
         {community.name}
       </h3>
       

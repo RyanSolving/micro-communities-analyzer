@@ -7,37 +7,37 @@
 }
 
 :root {
-  /* Theme Colors */
-  --bg-color: #08090c;
-  --bg-panel: rgba(17, 19, 26, 0.65);
-  --bg-card: rgba(22, 25, 35, 0.5);
-  --bg-card-hover: rgba(30, 34, 47, 0.7);
-  --border-color: rgba(255, 255, 255, 0.06);
-  --border-hover: rgba(255, 255, 255, 0.12);
+  /* Theme Colors — Premium Light Mode */
+  --bg-color: #f8fafc;
+  --bg-panel: rgba(255, 255, 255, 0.85);
+  --bg-card: rgba(255, 255, 255, 0.7);
+  --bg-card-hover: rgba(255, 255, 255, 0.95);
+  --border-color: rgba(0, 0, 0, 0.08);
+  --border-hover: rgba(0, 0, 0, 0.16);
   
   /* Accent Colors */
-  --accent-primary: #6366f1;
-  --accent-secondary: #3b82f6;
-  --accent-gold: #f59e0b;
-  --accent-gold-glow: rgba(245, 158, 11, 0.15);
-  --accent-glow: rgba(99, 102, 241, 0.2);
-  --accent-emerald: #10b981;
+  --accent-primary: #4f46e5;
+  --accent-secondary: #2563eb;
+  --accent-gold: #d97706;
+  --accent-gold-glow: rgba(217, 119, 6, 0.08);
+  --accent-glow: rgba(79, 70, 229, 0.1);
+  --accent-emerald: #059669;
   
   /* Text Colors */
-  --text-main: #f3f4f6;
-  --text-muted: #9ca3af;
-  --text-dark: #6b7280;
+  --text-main: #0f172a;
+  --text-muted: #334155;
+  --text-dark: #64748b;
 
   /* Platform Colors */
-  --color-reddit: #ff4500;
-  --color-discord: #5865f2;
-  --color-facebook: #1877f2;
-  --color-skool: #10b981;
-  --color-circle: #ec4899;
-  --color-mighty: #8b5cf6;
-  --color-threads: #ffffff;
+  --color-reddit: #ea4335;
+  --color-discord: #3c4bc5;
+  --color-facebook: #0e5ecf;
+  --color-skool: #047857;
+  --color-circle: #db2777;
+  --color-mighty: #6d28d9;
+  --color-threads: #000000;
   --color-slack: #4a154b;
-  --color-web: #0ea5e9;
+  --color-web: #0369a1;
 
   /* Transitions */
   --transition-smooth: cubic-bezier(0.4, 0, 0.2, 1);
@@ -61,7 +61,7 @@ body::before, body::after {
   z-index: -1;
   pointer-events: none;
   filter: blur(140px);
-  opacity: 0.12;
+  opacity: 0.06;
 }
 
 body::before {
@@ -101,12 +101,12 @@ body::after {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.12);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.24);
 }
 
 /* Typography styles */
@@ -279,7 +279,7 @@ h1, h2, h3, h4, h5, h6 {
   border: 1px solid var(--border-color);
   border-radius: 20px;
   padding: 2rem;
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.05);
   animation: fadeInStagger 0.5s var(--transition-smooth) both;
 }
 
@@ -333,7 +333,7 @@ h1, h2, h3, h4, h5, h6 {
   background: var(--bg-card-hover);
   border-color: var(--border-hover);
   transform: translateY(-6px);
-  box-shadow: 0 16px 32px -10px rgba(0, 0, 0, 0.5), 0 0 24px 0 rgba(99, 102, 241, 0.06);
+  box-shadow: 0 16px 32px -10px rgba(0, 0, 0, 0.08), 0 0 24px 0 rgba(99, 102, 241, 0.04);
 }
 
 .glow-card:hover::after {
@@ -373,26 +373,26 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .badge-platform {
-  color: #fff;
+  color: #fff !important;
 }
 
-.badge-reddit { background: rgba(255, 69, 0, 0.15); border: 1px solid var(--color-reddit); color: #ff682b; }
-.badge-discord { background: rgba(88, 101, 242, 0.15); border: 1px solid var(--color-discord); color: #7f8bff; }
-.badge-facebookgroup, .badge-facebook { background: rgba(24, 119, 242, 0.15); border: 1px solid var(--color-facebook); color: #4b97ff; }
-.badge-skool { background: rgba(16, 185, 129, 0.15); border: 1px solid var(--color-skool); color: #34d399; }
-.badge-circleso, .badge-circle { background: rgba(236, 72, 153, 0.15); border: 1px solid var(--color-circle); color: #f472b6; }
-.badge-mightynetworks, .badge-mighty { background: rgba(139, 92, 246, 0.15); border: 1px solid var(--color-mighty); color: #a78bfa; }
-.badge-threads { background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.5); color: #f3f4f6; }
-.badge-slack { background: rgba(74, 21, 75, 0.15); border: 1px solid var(--color-slack); color: #d463d6; }
-.badge-webforum, .badge-web { background: rgba(14, 165, 233, 0.15); border: 1px solid var(--color-web); color: #38bdf8; }
+.badge-reddit { background: rgba(234, 67, 53, 0.1); border: 1px solid var(--color-reddit); color: #ea4335; }
+.badge-discord { background: rgba(60, 75, 197, 0.1); border: 1px solid var(--color-discord); color: #3c4bc5; }
+.badge-facebookgroup, .badge-facebook { background: rgba(14, 94, 207, 0.1); border: 1px solid var(--color-facebook); color: #0e5ecf; }
+.badge-skool { background: rgba(4, 120, 87, 0.1); border: 1px solid var(--color-skool); color: #047857; }
+.badge-circleso, .badge-circle { background: rgba(219, 39, 119, 0.1); border: 1px solid var(--color-circle); color: #db2777; }
+.badge-mightynetworks, .badge-mighty { background: rgba(109, 40, 217, 0.1); border: 1px solid var(--color-mighty); color: #6d28d9; }
+.badge-threads { background: rgba(0, 0, 0, 0.08); border: 1px solid var(--color-threads); color: #000000; }
+.badge-slack { background: rgba(74, 21, 75, 0.1); border: 1px solid var(--color-slack); color: #721974; }
+.badge-webforum, .badge-web { background: rgba(3, 105, 161, 0.1); border: 1px solid var(--color-web); color: #0369a1; }
 
 .badge-monetization {
   font-weight: 700;
   gap: 0.25rem;
 }
 .badge-monetization.high {
-  background: rgba(245, 158, 11, 0.15);
-  color: #fbbf24;
+  background: rgba(217, 119, 6, 0.08);
+  color: #b45309;
   border: 1px solid var(--accent-gold);
   box-shadow: 0 0 10px var(--accent-gold-glow);
   animation: goldGlow 2s ease-in-out infinite alternate;
@@ -400,23 +400,23 @@ h1, h2, h3, h4, h5, h6 {
 
 @keyframes goldGlow {
   from { box-shadow: 0 0 8px var(--accent-gold-glow); }
-  to { box-shadow: 0 0 16px rgba(245, 158, 11, 0.25); }
+  to { box-shadow: 0 0 16px rgba(217, 119, 6, 0.18); }
 }
 
 .badge-monetization.medium {
-  background: rgba(99, 102, 241, 0.1);
-  color: #818cf8;
+  background: rgba(79, 70, 229, 0.08);
+  color: #4338ca;
   border: 1px solid var(--accent-primary);
 }
 .badge-monetization.low {
-  background: rgba(107, 114, 128, 0.15);
-  color: #9ca3af;
+  background: rgba(100, 116, 139, 0.08);
+  color: #475569;
   border: 1px solid var(--text-dark);
 }
 
 .badge-nsfw {
-  background: rgba(239, 68, 68, 0.15);
-  color: #f87171;
+  background: rgba(239, 68, 68, 0.1);
+  color: #b91c1c;
   border: 1px solid #ef4444;
 }
 
@@ -425,25 +425,25 @@ h1, h2, h3, h4, h5, h6 {
   font-weight: 600;
 }
 .badge-specificity.high {
-  background: rgba(16, 185, 129, 0.12);
-  color: #34d399;
-  border: 1px solid rgba(16, 185, 129, 0.4);
+  background: rgba(4, 120, 87, 0.08);
+  color: #047857;
+  border: 1px solid rgba(4, 120, 87, 0.3);
 }
 .badge-specificity.medium {
-  background: rgba(99, 102, 241, 0.1);
-  color: #818cf8;
-  border: 1px solid rgba(99, 102, 241, 0.3);
+  background: rgba(79, 70, 229, 0.08);
+  color: #4338ca;
+  border: 1px solid rgba(79, 70, 229, 0.25);
 }
 .badge-specificity.low {
-  background: rgba(239, 68, 68, 0.1);
-  color: #f87171;
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.08);
+  color: #b91c1c;
+  border: 1px solid rgba(239, 68, 68, 0.25);
 }
 
 /* Macro Group Warning Badge */
 .badge-macro-warning {
-  background: rgba(239, 68, 68, 0.1);
-  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.08);
+  color: #b91c1c;
   border: 1px solid rgba(239, 68, 68, 0.3);
   font-weight: 700;
   animation: pulseWarn 2s ease-in-out infinite;

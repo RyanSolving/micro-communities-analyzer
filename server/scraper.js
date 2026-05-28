@@ -154,28 +154,31 @@ export async function searchOtherPlatforms(query) {
   ];
 
   const results = [];
-  for (let i = 0; i < platformSearches.length; i++) {
-    const cfg = platformSearches[i];
+
+  // Fire all searches in parallel: Mojeek site queries + Circle Discovery
+  const mojeekPromises = platformSearches.map(async (cfg) => {
     try {
-      if (i > 0) {
-        // Wait 300ms between queries to avoid spamming Mojeek concurrently
-        await delay(300);
-      }
       console.log(`  Querying Mojeek for: "${cfg.siteFilter} ${query}"...`);
-      const platformResults = await searchViaMojeek(query, cfg);
-      results.push(...platformResults);
+      return await searchViaMojeek(query, cfg);
     } catch (err) {
       console.error(`  Mojeek search for ${cfg.siteFilter} failed:`, err.message);
+      return [];
     }
-  }
+  });
 
-  // Fast direct API check for Circle Discovery
-  try {
-    console.log(`  Querying Circle Discovery API for: "${query}"...`);
-    const circleResults = await searchViaCircleDiscovery(query);
-    results.push(...circleResults);
-  } catch (err) {
-    console.error('  Circle Discover fallback failed:', err.message);
+  const circlePromise = (async () => {
+    try {
+      console.log(`  Querying Circle Discovery API for: "${query}"...`);
+      return await searchViaCircleDiscovery(query);
+    } catch (err) {
+      console.error('  Circle Discover fallback failed:', err.message);
+      return [];
+    }
+  })();
+
+  const allResultsArray = await Promise.all([...mojeekPromises, circlePromise]);
+  for (const subResults of allResultsArray) {
+    results.push(...subResults);
   }
 
   // Flatten and deduplicate by normalized URL
@@ -253,7 +256,7 @@ async function searchViaCircleDiscovery(query) {
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       'Accept-Language': 'en-US,en;q=0.9',
     },
-    timeout: 15000
+    timeout: 4000
   });
 
   const flightText = extractNextFlightText(response.data);
@@ -461,7 +464,7 @@ async function searchViaMojeek(query, { siteFilter, defaultPlatform }) {
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       'Accept-Language': 'en-US,en;q=0.9',
     },
-    timeout: 3000
+    timeout: 2000
   });
 
   const $ = cheerio.load(response.data);
