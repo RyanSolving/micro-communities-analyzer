@@ -144,16 +144,13 @@ export async function searchReddit(query) {
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 export async function searchOtherPlatforms(query) {
-  // Search each platform separately because combined OR site filters are less reliable.
+  // Search each target platform separately
   const platformSearches = [
     { siteFilter: 'site:skool.com', defaultPlatform: 'Skool' },
     { siteFilter: 'site:circle.so', defaultPlatform: 'Circle.so' },
     { siteFilter: 'site:mn.co', defaultPlatform: 'Mighty Networks' },
     { siteFilter: 'site:facebook.com/groups', defaultPlatform: 'Facebook Group' },
-    { siteFilter: 'site:disboard.org', defaultPlatform: 'Discord' },
-    { siteFilter: 'site:threads.com', defaultPlatform: 'Threads' },
-    { siteFilter: 'site:threads.net', defaultPlatform: 'Threads' },
-    { siteFilter: 'site:thread.com', defaultPlatform: 'Threads' },
+    { siteFilter: 'site:disboard.org', defaultPlatform: 'Discord' }
   ];
 
   const results = [];
@@ -161,7 +158,8 @@ export async function searchOtherPlatforms(query) {
     const cfg = platformSearches[i];
     try {
       if (i > 0) {
-        await delay(500);
+        // Wait 300ms between queries to avoid spamming Mojeek concurrently
+        await delay(300);
       }
       console.log(`  Querying Mojeek for: "${cfg.siteFilter} ${query}"...`);
       const platformResults = await searchViaMojeek(query, cfg);
@@ -171,22 +169,13 @@ export async function searchOtherPlatforms(query) {
     }
   }
 
+  // Fast direct API check for Circle Discovery
   try {
+    console.log(`  Querying Circle Discovery API for: "${query}"...`);
     const circleResults = await searchViaCircleDiscovery(query);
     results.push(...circleResults);
   } catch (err) {
     console.error('  Circle Discover fallback failed:', err.message);
-  }
-
-  try {
-    console.log(`  Querying DuckDuckGo for indexed Threads results: "${query}"...`);
-    const threadResults = await searchViaDuckDuckGo(query, {
-      siteFilter: 'site:threads.com',
-      defaultPlatform: 'Threads'
-    });
-    results.push(...threadResults);
-  } catch (err) {
-    console.error('  DuckDuckGo Threads fallback failed:', err.message);
   }
 
   // Flatten and deduplicate by normalized URL
@@ -472,7 +461,7 @@ async function searchViaMojeek(query, { siteFilter, defaultPlatform }) {
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       'Accept-Language': 'en-US,en;q=0.9',
     },
-    timeout: 12000
+    timeout: 3000
   });
 
   const $ = cheerio.load(response.data);
