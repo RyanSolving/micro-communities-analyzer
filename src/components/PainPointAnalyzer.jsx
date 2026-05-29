@@ -78,6 +78,118 @@ function HighlightedContent({ text, categories }) {
   );
 }
 
+function PainPointItem({ opp, onSaveIdea }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const fullText = opp.fullContent || opp.rawContent || opp.snippet || '';
+  
+  const lines = fullText.split('\n');
+  const needsTruncation = fullText.length > 350 || lines.length > 5;
+
+  let displayContent = fullText;
+  if (needsTruncation && !isExpanded) {
+    if (lines.length > 5) {
+      displayContent = lines.slice(0, 4).join('\n') + '\n...';
+    } else {
+      displayContent = fullText.slice(0, 320) + '...';
+    }
+  }
+
+  return (
+    <article className="pain-point-item">
+      <div className="pain-point-header">
+        <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.5rem' }}>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-dark)' }}>
+              {opp.platform === 'Reddit' || !opp.platform
+                ? `Posted by u/${opp.author}`
+                : `Public signal from ${opp.source || opp.platform}`
+              }
+            </span>
+            <div className="pain-point-categories">
+              {opp.categories.map((cat, idx) => (
+                <span key={idx} className={`category-tag ${cat.type}`}>
+                  {cat.label} ({cat.matchedWord})
+                </span>
+              ))}
+            </div>
+          </div>
+          
+          <a 
+            href={opp.url} 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="pain-point-title"
+            style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.25rem', color: '#111827' }}
+          >
+            {opp.title}
+            <ExternalLink size={14} style={{ color: 'var(--accent-primary)', flexShrink: 0 }} />
+          </a>
+        </div>
+
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <button 
+            className="btn-secondary" 
+            onClick={() => onSaveIdea(opp)}
+            title="Bookmark this opportunity & thread to My Saved Niches"
+            style={{ padding: '0.5rem 0.75rem' }}
+          >
+            <Bookmark size={14} style={{ color: 'var(--accent-gold)' }} />
+            Bookmark & Ideate
+          </button>
+        </div>
+      </div>
+
+      <div style={{
+        fontSize: '0.9rem',
+        color: 'var(--text-muted)',
+        lineHeight: '1.55',
+        margin: '0.75rem 0',
+        background: 'rgba(0, 0, 0, 0.03)',
+        padding: '0.9rem',
+        borderRadius: '6px',
+        borderLeft: '3px solid var(--accent-primary)',
+        whiteSpace: 'pre-wrap'
+      }}>
+        <HighlightedContent text={displayContent} categories={opp.categories} />
+      </div>
+
+      {needsTruncation && (
+        <button
+          className="btn-secondary"
+          onClick={() => setIsExpanded(!isExpanded)}
+          style={{ padding: '0.4rem 0.65rem', fontSize: '0.82rem', marginBottom: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
+        >
+          {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          {isExpanded ? 'Show Less' : 'Show Full Content'}
+        </button>
+      )}
+
+      <div className="pain-point-meta">
+        {(opp.platform === 'Reddit' || !opp.platform) ? (
+          <>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <ThumbsUp size={12} />
+              {opp.score} upvotes
+            </span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <MessageSquare size={12} />
+              {opp.commentsCount} comments
+            </span>
+          </>
+        ) : (
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <MessageSquare size={12} />
+            Public web signal
+          </span>
+        )}
+        <span style={{ color: 'var(--accent-gold)', fontWeight: '600' }}>
+          Relevance: {opp.relevanceScore}/5
+        </span>
+      </div>
+    </article>
+  );
+}
+
 export default function PainPointAnalyzer({ initialSubreddit, initialCommunity, onClearSubreddit, onBackToSearch, onSavedUpdate }) {
   const [subreddit, setSubreddit] = useState(initialSubreddit || '');
   const [analysisTarget, setAnalysisTarget] = useState(initialCommunity || null);
@@ -85,7 +197,6 @@ export default function PainPointAnalyzer({ initialSubreddit, initialCommunity, 
   const [opportunities, setOpportunities] = useState([]);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
-  const [expandedContentIds, setExpandedContentIds] = useState(new Set());
 
   useEffect(() => {
     if (initialCommunity) {
@@ -108,7 +219,6 @@ export default function PainPointAnalyzer({ initialSubreddit, initialCommunity, 
     setError('');
     setOpportunities([]);
     setSuccessMsg('');
-    setExpandedContentIds(new Set());
 
     try {
       const response = await fetch('/api/analyze-community', {
@@ -146,7 +256,6 @@ export default function PainPointAnalyzer({ initialSubreddit, initialCommunity, 
     setError('');
     setOpportunities([]);
     setSuccessMsg('');
-    setExpandedContentIds(new Set());
 
     try {
       const response = await fetch(`/api/analyze?subreddit=${encodeURIComponent(cleanSub)}`);
@@ -280,7 +389,7 @@ export default function PainPointAnalyzer({ initialSubreddit, initialCommunity, 
               Back to Search
             </button>
             {onClearSubreddit && (
-              <button className="btn-secondary" onClick={() => { setSubreddit(''); setOpportunities([]); setExpandedContentIds(new Set()); onClearSubreddit(); }}>
+              <button className="btn-secondary" onClick={() => { setSubreddit(''); setOpportunities([]); onClearSubreddit(); }}>
                 Clear
               </button>
             )}
@@ -315,93 +424,13 @@ export default function PainPointAnalyzer({ initialSubreddit, initialCommunity, 
           </div>
         ) : opportunities.length > 0 ? (
           <div className="pain-point-list">
-            {opportunities.map((opp) => {
-              const fullText = opp.fullContent || opp.rawContent || opp.snippet || '';
-
-              return (
-              <article key={opp.id} className="pain-point-item">
-                <div className="pain-point-header">
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.5rem' }}>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-dark)' }}>
-                        {opp.platform === 'Reddit' || !opp.platform
-                          ? `Posted by u/${opp.author}`
-                          : `Public signal from ${opp.source || opp.platform}`
-                        }
-                      </span>
-                      <div className="pain-point-categories">
-                        {opp.categories.map((cat, idx) => (
-                          <span key={idx} className={`category-tag ${cat.type}`}>
-                            {cat.label} ({cat.matchedWord})
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                    
-                    <a 
-                      href={opp.url} 
-                      target="_blank" 
-                      rel="noopener noreferrer" 
-                      className="pain-point-title"
-                      style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.25rem', color: '#111827' }}
-                    >
-                      {opp.title}
-                      <ExternalLink size={14} style={{ color: 'var(--accent-primary)', flexShrink: 0 }} />
-                    </a>
-                  </div>
-
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <button 
-                      className="btn-secondary" 
-                      onClick={() => handleSaveIdea(opp)}
-                      title="Bookmark this opportunity & thread to My Saved Niches"
-                      style={{ padding: '0.5rem 0.75rem' }}
-                    >
-                      <Bookmark size={14} style={{ color: 'var(--accent-gold)' }} />
-                      Bookmark & Ideate
-                    </button>
-                  </div>
-                </div>
-
-                <div style={{
-                  fontSize: '0.9rem',
-                  color: 'var(--text-muted)',
-                  lineHeight: '1.55',
-                  margin: '0.75rem 0',
-                  background: 'rgba(0, 0, 0, 0.03)',
-                  padding: '0.9rem',
-                  borderRadius: '6px',
-                  borderLeft: '3px solid var(--accent-primary)',
-                  whiteSpace: 'pre-wrap'
-                }}>
-                  <HighlightedContent text={fullText} categories={opp.categories} />
-                </div>
-
-                <div className="pain-point-meta">
-                  {(opp.platform === 'Reddit' || !opp.platform) ? (
-                    <>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <ThumbsUp size={12} />
-                        {opp.score} upvotes
-                      </span>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <MessageSquare size={12} />
-                        {opp.commentsCount} comments
-                      </span>
-                    </>
-                  ) : (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <MessageSquare size={12} />
-                      Public web signal
-                    </span>
-                  )}
-                  <span style={{ color: 'var(--accent-gold)', fontWeight: '600' }}>
-                    Relevance: {opp.relevanceScore}/5
-                  </span>
-                </div>
-              </article>
-              );
-            })}
+            {opportunities.map((opp) => (
+              <PainPointItem 
+                key={opp.id} 
+                opp={opp} 
+                onSaveIdea={handleSaveIdea} 
+              />
+            ))}
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '4rem 0', gap: '1rem', color: 'var(--text-dark)' }}>
