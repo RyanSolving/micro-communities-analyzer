@@ -654,11 +654,76 @@ async function fetchRedditPostsViaHtml(subreddit) {
       }
     });
 
+    // Hydrate posts: listing page only has titles, fetch individual pages for full body + comments
+    const nonStickied = posts.filter(p => !p.stickied && !p.body);
+    if (nonStickied.length > 0) {
+      console.log(`  Hydrating ${nonStickied.length} posts with full content from old.reddit.com...`);
+      await hydratePostsBatch(nonStickied);
+    }
+
     return posts;
   } catch (error) {
     console.error(`  old.reddit.com HTML fetch failed for r/${subreddit}:`, error.message);
     return [];
   }
+}
+
+// Fetch full body + top comments for a single post from old.reddit.com
+async function hydratePostContent(post) {
+  try {
+    const oldUrl = post.url.replace(/(?:www\.|new\.)?reddit\.com/, 'old.reddit.com');
+    const response = await axios.get(oldUrl, {
+      headers: {
+        'User-Agent': BROWSER_USER_AGENT,
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      timeout: 12000,
+      maxRedirects: 3
+    });
+
+    const $ = cheerio.load(response.data);
+
+    // Extract self-text (post body) from the post page
+    const selfText = $('.expando .usertext-body .md').first().text().trim()
+      || $('div.usertext-body .md').first().text().trim();
+
+    // Extract top comments for richer classification context
+    const comments = [];
+    $('.commentarea .comment .entry .usertext-body .md').each((i, el) => {
+      if (i >= 8) return false;
+      const text = $(el).text().trim();
+      if (text && text.length > 20) comments.push(text);
+    });
+
+    const fullBody = [selfText, ...comments].filter(Boolean).join('\n\n');
+    if (fullBody) {
+      post.body = fullBody;
+    }
+  } catch {
+    // Silently skip — title-only classification is still usable
+  }
+}
+
+// Hydrate a batch of posts with concurrency limit to avoid rate-limiting
+async function hydratePostsBatch(posts, concurrency = 3) {
+  const queue = [...posts];
+  let hydrated = 0;
+
+  async function worker() {
+    while (queue.length > 0) {
+      const post = queue.shift();
+      if (!post) break;
+      await hydratePostContent(post);
+      hydrated++;
+      // Small delay between requests to be polite
+      if (queue.length > 0) await delay(300);
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(concurrency, queue.length) }, () => worker());
+  await Promise.all(workers);
+  console.log(`  Hydrated ${hydrated} posts with full content`);
 }
 
 async function searchWebForNeeds(searchQuery, community, queryKeywords, sourceLabel = community.platform) {
