@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, SlidersHorizontal, Sparkles, AlertCircle, Lightbulb, ChevronDown, ChevronUp, Zap, Palette, Dumbbell, DollarSign, Cpu, Gamepad2, Utensils, GraduationCap, Heart, Wrench } from 'lucide-react';
+import { Search, SlidersHorizontal, Sparkles, AlertCircle, Lightbulb, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Zap, Palette, Dumbbell, DollarSign, Cpu, Gamepad2, Utensils, GraduationCap, Heart, Wrench } from 'lucide-react';
 import CommunityCard from './CommunityCard.jsx';
 import SearchBar from './SearchBar.jsx';
 
@@ -154,6 +154,7 @@ export default function Dashboard({ onAnalyze, onSavedUpdate, scrollToResults })
   const [onlySweetSpot, setOnlySweetSpot] = useState(true);
   const [showNsfw, setShowNsfw] = useState(false);
   const [onlyHighMonetization, setOnlyHighMonetization] = useState(false);
+  const [isFiltersExpanded, setIsFiltersExpanded] = useState(true);
 
   // Fetch saved URLs to check bookmarks
   const fetchSavedUrls = async () => {
@@ -310,78 +311,131 @@ export default function Dashboard({ onAnalyze, onSavedUpdate, scrollToResults })
 
 
       {/* Main Results Workspace */}
-      <div className="dashboard-layout" style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: '2rem', alignItems: 'start' }}>
+      {/* Main Results Workspace */}
+      <div className="dashboard-layout" style={{ 
+        display: 'grid', 
+        gridTemplateColumns: isFiltersExpanded ? '260px 1fr' : '68px 1fr', 
+        gap: '2rem', 
+        alignItems: 'start',
+        transition: 'grid-template-columns 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+      }}>
         {/* Filters Sidebar */}
-        <aside className="glass-panel" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
-            <SlidersHorizontal size={18} style={{ color: 'var(--accent-primary)' }} />
-            <h3 style={{ fontSize: '1.1rem' }}>Filter Options</h3>
-          </div>
-
-          {/* Size Filter */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem' }}>
-              <input
-                type="checkbox"
-                checked={onlySweetSpot}
-                onChange={(e) => setOnlySweetSpot(e.target.checked)}
-                style={{ width: '16px', height: '16px', accentColor: 'var(--accent-primary)' }}
-              />
-              <span style={{ fontWeight: '500' }}>Only Micro-Sweet Spot</span>
-            </label>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-dark)', marginLeft: '1.5rem' }}>
-              Strictly show groups between 500 and 30k members (excludes massive groups).
-            </p>
-          </div>
-
-          {/* Monetization filter */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem' }}>
-              <input
-                type="checkbox"
-                checked={onlyHighMonetization}
-                onChange={(e) => setOnlyHighMonetization(e.target.checked)}
-                style={{ width: '16px', height: '16px', accentColor: 'var(--accent-primary)' }}
-              />
-              <span style={{ fontWeight: '500' }}>High Monetization Only</span>
-            </label>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-dark)', marginLeft: '1.5rem' }}>
-              Only show platforms like Skool or Circle where members already pay.
-            </p>
-          </div>
-
-          {/* NSFW / 18+ filter */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem' }}>
-              <input
-                type="checkbox"
-                checked={showNsfw}
-                onChange={(e) => setShowNsfw(e.target.checked)}
-                style={{ width: '16px', height: '16px', accentColor: 'var(--accent-primary)' }}
-              />
-              <span style={{ fontWeight: '500', color: showNsfw ? '#f87171' : 'inherit' }}>Show 18+ / Adult groups</span>
-            </label>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-dark)', marginLeft: '1.5rem' }}>
-              Enable to search for mature niches, fetishes, or adult hobby groups.
-            </p>
-          </div>
-
-          {/* Platform Filter */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            <h4 style={{ fontSize: '0.85rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Platform</h4>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-              {['All', 'Reddit', 'Discord', 'Facebook Group', 'Skool', 'Circle.so', 'Mighty Networks', 'Threads'].map(p => (
-                <button
-                  key={p}
-                  className={`btn-secondary ${selectedPlatform === p ? 'active' : ''}`}
-                  onClick={() => setSelectedPlatform(p)}
-                  style={{ justifyContent: 'flex-start', padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}
-                >
-                  {p}
-                </button>
-              ))}
+        <aside className="glass-panel" style={{ 
+          padding: isFiltersExpanded ? '1.5rem' : '1.5rem 0.5rem', 
+          display: 'flex', 
+          flexDirection: 'column', 
+          gap: isFiltersExpanded ? '1.5rem' : '1rem',
+          width: isFiltersExpanded ? 'auto' : '68px',
+          alignItems: isFiltersExpanded ? 'stretch' : 'center',
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          overflow: 'hidden'
+        }}>
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: isFiltersExpanded ? 'space-between' : 'center',
+            flexDirection: isFiltersExpanded ? 'row' : 'column',
+            gap: '0.5rem',
+            borderBottom: isFiltersExpanded ? '1px solid var(--border-color)' : 'none', 
+            paddingBottom: isFiltersExpanded ? '0.75rem' : '0',
+            width: '100%',
+            transition: 'all 0.3s ease'
+          }}>
+            <div 
+              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }} 
+              onClick={() => !isFiltersExpanded && setIsFiltersExpanded(true)}
+              title={!isFiltersExpanded ? "Expand Filters" : undefined}
+            >
+              <SlidersHorizontal size={18} style={{ color: 'var(--accent-primary)', flexShrink: 0 }} />
+              {isFiltersExpanded && <h3 style={{ fontSize: '1.1rem', whiteSpace: 'nowrap' }}>Filter Options</h3>}
             </div>
+            <button 
+              onClick={() => setIsFiltersExpanded(!isFiltersExpanded)}
+              className="btn-secondary"
+              title={isFiltersExpanded ? "Collapse Filters" : "Expand Filters"}
+              style={{ 
+                padding: '0.35rem', 
+                border: 'none', 
+                background: 'transparent',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: '8px',
+                cursor: 'pointer'
+              }}
+            >
+              {isFiltersExpanded ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+            </button>
           </div>
+
+          {isFiltersExpanded && (
+            <>
+              {/* Size Filter */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem' }}>
+                  <input
+                    type="checkbox"
+                    checked={onlySweetSpot}
+                    onChange={(e) => setOnlySweetSpot(e.target.checked)}
+                    style={{ width: '16px', height: '16px', accentColor: 'var(--accent-primary)' }}
+                  />
+                  <span style={{ fontWeight: '500' }}>Only Micro-Sweet Spot</span>
+                </label>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-dark)', marginLeft: '1.5rem' }}>
+                  Strictly show groups between 500 and 30k members (excludes massive groups).
+                </p>
+              </div>
+
+              {/* Monetization filter */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem' }}>
+                  <input
+                    type="checkbox"
+                    checked={onlyHighMonetization}
+                    onChange={(e) => setOnlyHighMonetization(e.target.checked)}
+                    style={{ width: '16px', height: '16px', accentColor: 'var(--accent-primary)' }}
+                  />
+                  <span style={{ fontWeight: '500' }}>High Monetization Only</span>
+                </label>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-dark)', marginLeft: '1.5rem' }}>
+                  Only show platforms like Skool or Circle where members already pay.
+                </p>
+              </div>
+
+              {/* NSFW / 18+ filter */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem' }}>
+                  <input
+                    type="checkbox"
+                    checked={showNsfw}
+                    onChange={(e) => setShowNsfw(e.target.checked)}
+                    style={{ width: '16px', height: '16px', accentColor: 'var(--accent-primary)' }}
+                  />
+                  <span style={{ fontWeight: '500', color: showNsfw ? '#f87171' : 'inherit' }}>Show 18+ / Adult groups</span>
+                </label>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-dark)', marginLeft: '1.5rem' }}>
+                  Enable to search for mature niches, fetishes, or adult hobby groups.
+                </p>
+              </div>
+
+              {/* Platform Filter */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <h4 style={{ fontSize: '0.85rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Platform</h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                  {['All', 'Reddit', 'Discord', 'Facebook Group', 'Skool', 'Circle.so', 'Mighty Networks', 'Threads'].map(p => (
+                    <button
+                      key={p}
+                      className={`btn-secondary ${selectedPlatform === p ? 'active' : ''}`}
+                      onClick={() => setSelectedPlatform(p)}
+                      style={{ justifyContent: 'flex-start', padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
         </aside>
 
         {/* Results Container */}
