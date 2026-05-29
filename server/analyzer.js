@@ -1,5 +1,5 @@
 import { redditGet } from './redditClient.js';
-import { searchWeb } from './webSearch.js';
+import { scrapeUrl, searchWeb } from './webSearch.js';
 
 // Define categorization patterns — much broader to catch real-world language
 const PATTERNS = {
@@ -155,6 +155,33 @@ function buildOpportunityText({ title, markdown, description }) {
   const rawContent = `${title || ''}\n\n${fullContent}`;
 
   return { snippet, fullContent, rawContent };
+}
+
+function needsFullContentHydration(item) {
+  const markdownLength = item.markdown?.length || 0;
+  const description = item.description || '';
+  return markdownLength < 800 || /\.\.\.|…/.test(description);
+}
+
+async function hydrateRedditSearchResult(item) {
+  if (!needsFullContentHydration(item)) return item;
+
+  try {
+    const scraped = await scrapeUrl(item.url);
+    if (!scraped?.markdown || scraped.markdown.length < (item.markdown?.length || 0)) {
+      return item;
+    }
+
+    return {
+      ...item,
+      title: item.title || scraped.title,
+      description: item.description || scraped.description,
+      markdown: scraped.markdown
+    };
+  } catch (error) {
+    console.error(`  Firecrawl scrape failed for Reddit result ${item.url}:`, error.message);
+    return item;
+  }
 }
 
 function classifyText(fullText) {
@@ -453,18 +480,19 @@ async function analyzeSubredditNeedsViaSearch(subreddit) {
         if (seenUrls.has(normalizedUrl)) continue;
         seenUrls.add(normalizedUrl);
 
+        const hydratedItem = await hydrateRedditSearchResult(item);
         const { snippet, fullContent, rawContent } = buildOpportunityText({
-          title: item.title || `Reddit signal in r/${subreddit}`,
-          markdown: item.markdown,
-          description: item.description
+          title: hydratedItem.title || `Reddit signal in r/${subreddit}`,
+          markdown: hydratedItem.markdown,
+          description: hydratedItem.description
         });
         const { matchedCategories, score } = classifyText(rawContent);
         if (matchedCategories.length === 0) continue;
 
         results.push({
           id: `web-reddit-${results.length}-${Date.now()}`,
-          title: item.title || `Reddit signal in r/${subreddit}`,
-          url: item.url,
+          title: hydratedItem.title || `Reddit signal in r/${subreddit}`,
+          url: hydratedItem.url || item.url,
           author: 'Reddit',
           platform: 'Reddit',
           source: 'Public web search',

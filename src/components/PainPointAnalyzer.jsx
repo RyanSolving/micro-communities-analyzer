@@ -317,10 +317,13 @@ export default function PainPointAnalyzer({ initialSubreddit, initialCommunity, 
           <div className="pain-point-list">
             {opportunities.map((opp) => {
               const isExpanded = expandedContentIds.has(opp.id);
-              const displayContent = isExpanded
+              const isRedditOpportunity = opp.platform === 'Reddit' || !opp.platform;
+              const displayContent = isRedditOpportunity
+                ? (opp.fullContent || opp.rawContent || opp.snippet)
+                : isExpanded
                 ? (opp.fullContent || opp.rawContent || opp.snippet)
                 : (opp.snippet || opp.fullContent || opp.rawContent);
-              const canExpand = Boolean(opp.fullContent && opp.fullContent !== opp.snippet);
+              const canExpand = !isRedditOpportunity && Boolean(opp.fullContent && opp.fullContent !== opp.snippet);
 
               return (
               <article key={opp.id} className="pain-point-item">
@@ -377,8 +380,8 @@ export default function PainPointAnalyzer({ initialSubreddit, initialCommunity, 
                   borderRadius: '6px',
                   borderLeft: '3px solid var(--accent-primary)',
                   whiteSpace: 'pre-wrap',
-                  maxHeight: isExpanded ? 'none' : '11rem',
-                  overflow: isExpanded ? 'visible' : 'hidden'
+                  maxHeight: isRedditOpportunity || isExpanded ? 'none' : '11rem',
+                  overflow: isRedditOpportunity || isExpanded ? 'visible' : 'hidden'
                 }}>
                   <HighlightedContent text={displayContent} categories={opp.categories} />
                 </div>

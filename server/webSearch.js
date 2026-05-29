@@ -6,6 +6,7 @@ const FIRECRAWL_API_KEY = process.env.FIRECRAWL_API_KEY || '';
 const BRAVE_SEARCH_API_KEY = process.env.BRAVE_SEARCH_API_KEY || '';
 
 const searchCache = new Map();
+const scrapeCache = new Map();
 
 export function cleanText(value) {
   return (value || '').replace(/\s+/g, ' ').trim();
@@ -48,6 +49,19 @@ export async function searchWeb(query, {
 
   searchCache.set(cacheKey, { createdAt: Date.now(), results });
   return results;
+}
+
+export async function scrapeUrl(url) {
+  if (!FIRECRAWL_API_KEY || !url) return null;
+
+  const cached = scrapeCache.get(url);
+  if (cached && Date.now() - cached.createdAt < 30 * 60 * 1000) {
+    return cached.result;
+  }
+
+  const result = await scrapeViaFirecrawl(url);
+  scrapeCache.set(url, { createdAt: Date.now(), result });
+  return result;
 }
 
 function getProviderOrder(preferredProviders) {
@@ -109,6 +123,66 @@ async function searchViaFirecrawl(query, { limit, scrape, includeDomains }) {
     description: cleanText(item.description || item.snippet || item.metadata?.description),
     markdown: cleanText(item.markdown)
   }));
+}
+
+async function scrapeViaFirecrawl(url) {
+  const scrapeBody = {
+    url,
+    formats: [{ type: 'markdown' }]
+  };
+
+  try {
+    const response = await axios.post(
+      'https://api.firecrawl.dev/v2/scrape',
+      scrapeBody,
+      {
+        headers: {
+          'Authorization': `Bearer ${FIRECRAWL_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000
+      }
+    );
+
+    if (response.data?.success === false) {
+      throw new Error(response.data?.error || 'Firecrawl scrape failed');
+    }
+
+    const data = response.data?.data || response.data;
+    return {
+      title: cleanText(data.title || data.metadata?.title),
+      url: data.url || data.metadata?.sourceURL || data.metadata?.url || url,
+      description: cleanText(data.description || data.metadata?.description),
+      markdown: cleanText(data.markdown)
+    };
+  } catch (error) {
+    const response = await axios.post(
+      'https://api.firecrawl.dev/v1/scrape',
+      {
+        url,
+        formats: ['markdown']
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${FIRECRAWL_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000
+      }
+    );
+
+    if (response.data?.success === false) {
+      throw new Error(response.data?.error || error.message || 'Firecrawl scrape failed');
+    }
+
+    const data = response.data?.data || response.data;
+    return {
+      title: cleanText(data.title || data.metadata?.title),
+      url: data.url || data.metadata?.sourceURL || data.metadata?.url || url,
+      description: cleanText(data.description || data.metadata?.description),
+      markdown: cleanText(data.markdown)
+    };
+  }
 }
 
 async function searchViaBrave(query, limit) {
