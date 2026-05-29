@@ -22,8 +22,6 @@ const PATTERNS = {
 };
 
 const PLATFORM_SITE_FILTERS = {
-  'Skool': 'site:skool.com',
-  'Circle.so': 'site:circle.so',
   'Mighty Networks': 'site:mn.co',
   'Facebook Group': 'site:facebook.com/groups',
   'Discord': 'site:disboard.org',
@@ -31,6 +29,70 @@ const PLATFORM_SITE_FILTERS = {
 };
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+const MAX_SNIPPET_LENGTH = 700;
+const MAX_FULL_CONTENT_LENGTH = 1800;
+
+function normalizeText(value) {
+  return (value || '')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/!\[[^\]]*\]\([^)]+\)/g, '')
+    .replace(/https?:\/\/\S+/g, ' ')
+    .replace(/\\([_*\[\]()|])/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function truncateText(value, maxLength) {
+  const text = normalizeText(value);
+  if (text.length <= maxLength) return text;
+
+  const truncated = text.slice(0, maxLength);
+  const lastSentence = Math.max(
+    truncated.lastIndexOf('. '),
+    truncated.lastIndexOf('? '),
+    truncated.lastIndexOf('! ')
+  );
+  const end = lastSentence > maxLength * 0.45 ? lastSentence + 1 : truncated.lastIndexOf(' ');
+  return `${truncated.slice(0, end > 0 ? end : maxLength).trim()}...`;
+}
+
+function isNoiseLine(line) {
+  return /^(skip to|go to |r\/|share$|report$|read more$|advertisement|promoted|about this ad|tired of ads|learn more$|comments section|moderator announcement|i am a bot|reddit rules|privacy policy|user agreement|your privacy choices|accessibility|expand navigation|collapse navigation|recaptcha|protected by|all rights reserved)/i.test(line);
+}
+
+function cleanScrapedRedditContent(rawText, title = '') {
+  const normalizedTitle = normalizeText(title).toLowerCase();
+  const lines = (rawText || '')
+    .split(/\r?\n+/)
+    .map(line => normalizeText(line))
+    .filter(Boolean)
+    .filter(line => line.length > 2)
+    .filter(line => !isNoiseLine(line))
+    .filter(line => line.toLowerCase() !== normalizedTitle);
+
+  const kept = [];
+  for (const line of lines) {
+    if (/^\d+\s*(upvotes?|comments?)\b/i.test(line)) continue;
+    if (/\b(reddit rules|privacy policy|user agreement|recaptcha requires verification)\b/i.test(line)) break;
+    if (/\b(advertisement|promoted|sponsored|walmart|homedepot|the home depot)\b/i.test(line)) continue;
+    if (line.length < 25 && kept.length > 0) continue;
+
+    kept.push(line);
+    if (kept.join(' ').length > MAX_FULL_CONTENT_LENGTH) break;
+  }
+
+  const cleaned = kept.join(' ');
+  return cleaned || normalizeText(rawText);
+}
+
+function buildOpportunityText({ title, markdown, description }) {
+  const cleanedContent = cleanScrapedRedditContent(markdown || description || '', title);
+  const fullContent = truncateText(cleanedContent || description || title, MAX_FULL_CONTENT_LENGTH);
+  const snippet = truncateText(cleanedContent || description || title, MAX_SNIPPET_LENGTH);
+  const rawContent = `${title || ''}\n\n${fullContent}`;
+
+  return { snippet, fullContent, rawContent };
+}
 
 function classifyText(fullText) {
   const matchedCategories = [];
@@ -90,6 +152,43 @@ function getSiteFilter(community) {
   }
 }
 
+function getPlatformDomains(platform) {
+  const domainsByPlatform = {
+    'Facebook Group': ['facebook.com'],
+    'Mighty Networks': ['mn.co', 'mightynetworks.com'],
+    'Discord': ['disboard.org', 'discord.gg', 'discord.com'],
+    'Threads': ['threads.com', 'threads.net']
+  };
+
+  return domainsByPlatform[platform] || [];
+}
+
+function isValidPlatformSignalUrl(platform, url) {
+  if (!url) return false;
+
+  try {
+    const parsed = new URL(url);
+    const hostname = parsed.hostname.replace(/^www\./, '').toLowerCase();
+    const pathname = parsed.pathname.toLowerCase();
+
+    if (platform === 'Facebook Group') {
+      return hostname === 'facebook.com' && pathname.startsWith('/groups/');
+    }
+    if (platform === 'Mighty Networks') return hostname === 'mn.co' || hostname.endsWith('.mn.co') || hostname.includes('mightynetworks.com');
+    if (platform === 'Discord') return hostname === 'disboard.org' || hostname === 'discord.gg' || hostname === 'discord.com';
+    if (platform === 'Threads') return hostname === 'threads.com' || hostname === 'threads.net';
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isLikelyAdOrCorporateSignal(title, text, url) {
+  const combined = `${title || ''} ${text || ''} ${url || ''}`.toLowerCase();
+  return /\b(advertisement|sponsored|promoted|supply chain leaders|dashboard for your entire|book a demo|request demo|whitepaper|case study|webinar|pricing|enterprise)\b/.test(combined);
+}
+
 function isRelevantToCommunity(query, ...values) {
   const queryTokens = query.match(/[a-z0-9]+/gi)?.filter(token => token.length > 3) || [];
   if (queryTokens.length === 0) return true;
@@ -106,7 +205,9 @@ function isRelevantToCommunity(query, ...values) {
 function buildMetadataFallbackNeeds(community, queryKeywords) {
   const nicheLabel = community?.name || queryKeywords || 'this community';
   const platform = community?.platform || 'Web';
-  const sourceNote = 'Public posts were not accessible or indexed, so this signal is inferred from the community metadata and platform context.';
+  const sourceNote = ['Skool', 'Circle.so'].includes(platform)
+    ? `${platform} member discussions are not publicly accessible, so this signal is inferred from the community metadata and platform context.`
+    : 'Public posts were not accessible or indexed, so this signal is inferred from the community metadata and platform context.';
 
   return [
     {
@@ -289,9 +390,12 @@ async function analyzeSubredditNeedsViaSearch(subreddit) {
         if (seenUrls.has(normalizedUrl)) continue;
         seenUrls.add(normalizedUrl);
 
-        const fullContent = item.markdown || item.description || '(No body text)';
-        const fullText = `${item.title || ''}\n\n${fullContent}`;
-        const { matchedCategories, score } = classifyText(fullText);
+        const { snippet, fullContent, rawContent } = buildOpportunityText({
+          title: item.title || `Reddit signal in r/${subreddit}`,
+          markdown: item.markdown,
+          description: item.description
+        });
+        const { matchedCategories, score } = classifyText(rawContent);
         if (matchedCategories.length === 0) continue;
 
         results.push({
@@ -304,9 +408,9 @@ async function analyzeSubredditNeedsViaSearch(subreddit) {
           score: 0,
           commentsCount: 0,
           categories: matchedCategories,
-          snippet: fullContent,
+          snippet,
           fullContent,
-          rawContent: fullText,
+          rawContent,
           relevanceScore: score
         });
       }
@@ -320,20 +424,36 @@ async function analyzeSubredditNeedsViaSearch(subreddit) {
 }
 
 async function searchWebForNeeds(searchQuery, community, queryKeywords, sourceLabel = community.platform) {
-  const webResults = await searchWeb(searchQuery, { limit: 10, scrape: true });
+  const platformDomains = getPlatformDomains(community.platform);
+  const shouldScrape = community.platform !== 'Facebook Group';
+  const preferredProviders = community.platform === 'Facebook Group'
+    ? ['brave', 'firecrawl', 'yahoo']
+    : ['firecrawl', 'brave', 'yahoo'];
+
+  const webResults = await searchWeb(searchQuery, {
+    limit: 10,
+    scrape: shouldScrape,
+    includeDomains: platformDomains,
+    preferredProviders
+  });
   const results = [];
 
   webResults.forEach((item, index) => {
     const url = item.url;
     const title = item.title;
     if (!url || !title) return;
+    if (!isValidPlatformSignalUrl(community.platform, url)) return;
 
-    const snippet = item.markdown || item.description || '';
+    const { snippet, fullContent, rawContent } = buildOpportunityText({
+      title,
+      markdown: item.markdown,
+      description: item.description
+    });
+    if (isLikelyAdOrCorporateSignal(title, rawContent, url)) return;
 
-    if (!isRelevantToCommunity(queryKeywords, title, snippet, url)) return;
+    if (!isRelevantToCommunity(queryKeywords, title, rawContent, url)) return;
 
-    const fullText = `${title}\n\n${snippet}`;
-    const { matchedCategories, score } = classifyText(fullText);
+    const { matchedCategories, score } = classifyText(rawContent);
     if (matchedCategories.length === 0) return;
 
     results.push({
@@ -347,8 +467,8 @@ async function searchWebForNeeds(searchQuery, community, queryKeywords, sourceLa
       commentsCount: 0,
       categories: matchedCategories,
       snippet: snippet || 'Public search result matched a need signal.',
-      fullContent: snippet || 'Public search result matched a need signal.',
-      rawContent: fullText,
+      fullContent: fullContent || 'Public search result matched a need signal.',
+      rawContent,
       relevanceScore: score
     });
   });
@@ -366,9 +486,16 @@ export async function analyzeCommunityNeeds(community) {
   }
 
   try {
-    const siteFilter = getSiteFilter(community);
     const queryKeywords = getCommunityQuery(community);
-    if (!siteFilter || !queryKeywords) return [];
+    if (!queryKeywords) return [];
+
+    if (['Skool', 'Circle.so'].includes(community.platform)) {
+      console.log(`  ${community.platform} discussions are not publicly accessible; using metadata fallback for ${community.name}.`);
+      return buildMetadataFallbackNeeds(community, queryKeywords);
+    }
+
+    const siteFilter = getSiteFilter(community);
+    if (!siteFilter) return buildMetadataFallbackNeeds(community, queryKeywords);
 
     console.log(`  Searching public need signals for ${community.platform}: "${queryKeywords}"...`);
 
@@ -400,7 +527,7 @@ export async function analyzeCommunityNeeds(community) {
       }
     }
 
-    if (deduped.length === 0) {
+    if (deduped.length === 0 && !getPlatformDomains(community.platform).length) {
       const broaderQueries = [
         `${queryKeywords} forum problem issue help`,
         `${queryKeywords} recommend best tool`,
