@@ -143,7 +143,23 @@ export async function searchReddit(query) {
 }
 
 async function searchRedditViaWeb(query) {
-  const webResults = await searchWeb(`${query} "reddit.com/r/"`, { limit: 20 });
+  const webQueries = [
+    `site:reddit.com/r ${query}`,
+    `reddit ${query} subreddit`,
+    `${query} reddit community`
+  ];
+  const webResults = [];
+
+  for (const webQuery of webQueries) {
+    try {
+      const queryResults = await searchWeb(webQuery, { limit: 12 });
+      console.log(`  Reddit web query "${webQuery}" returned ${queryResults.length} results`);
+      webResults.push(...queryResults);
+    } catch (error) {
+      console.error(`  Reddit web query failed for "${webQuery}":`, error.message);
+    }
+  }
+
   const results = [];
   const seenSubs = new Set();
 

@@ -13,6 +13,7 @@ export function cleanText(value) {
 
 export async function searchWeb(query, { limit = 20, scrape = false } = {}) {
   const provider = FIRECRAWL_API_KEY ? 'firecrawl' : BRAVE_SEARCH_API_KEY ? 'brave' : 'yahoo';
+  console.log(`  Web search provider: ${provider} (${limit} results)`);
   const cacheKey = `${provider}:${query}:${limit}:${scrape ? 'scrape' : 'serp'}`;
   const cached = searchCache.get(cacheKey);
   if (cached && Date.now() - cached.createdAt < 10 * 60 * 1000) {
