@@ -30,7 +30,7 @@ const PLATFORM_SITE_FILTERS = {
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const MAX_SNIPPET_LENGTH = 700;
-const MAX_FULL_CONTENT_LENGTH = 1800;
+const MAX_FULL_CONTENT_LENGTH = 12000;
 
 function normalizeText(value) {
   return (value || '')
@@ -56,11 +56,74 @@ function truncateText(value, maxLength) {
   return `${truncated.slice(0, end > 0 ? end : maxLength).trim()}...`;
 }
 
+function removeMarkdownNoise(value) {
+  return (value || '')
+    .replace(/!\[[^\]]*\]\([^)]+\)/g, '')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/https?:\/\/\S+/g, ' ')
+    .replace(/\\([_*\[\]()|`])/g, '$1');
+}
+
+function extractMainRedditPost(rawText, title = '') {
+  const withoutMarkdown = removeMarkdownNoise(rawText);
+  const titleText = normalizeText(title)
+    .replace(/\s*:\s*r\/[^-]+(?:\s*-\s*Reddit)?$/i, '')
+    .trim();
+  const lower = withoutMarkdown.toLowerCase();
+  const titleLower = titleText.toLowerCase();
+
+  let start = -1;
+  if (titleLower) {
+    start = lower.indexOf(`# ${titleLower}`);
+    if (start === -1) start = lower.indexOf(titleLower);
+  }
+  if (start === -1) start = 0;
+
+  let slice = withoutMarkdown.slice(start);
+  const stopPatterns = [
+    /\bRead more\b/i,
+    /\bShare\s+\*\s+\*\s+\*\s+Advertisement\b/i,
+    /\bAdvertisement:/i,
+    /\bComments Section\b/i,
+    /\bModerator Announcement\b/i,
+    /\bMore posts you may like\b/i,
+    /\bReddit Rules\b/i,
+    /\bExpand Navigation\b/i,
+    /\breCAPTCHA\b/i
+  ];
+
+  let stop = slice.length;
+  for (const pattern of stopPatterns) {
+    const match = slice.match(pattern);
+    if (match && match.index > 120) {
+      stop = Math.min(stop, match.index);
+    }
+  }
+
+  slice = slice.slice(0, stop);
+  slice = slice
+    .replace(/^.*?#\s*/s, '')
+    .replace(/\bSkip to (?:main content|Navigation|Right Sidebar|Sign up)\b/gi, ' ')
+    .replace(/\b\d+\s*[·•]\s*\d+\s+Back\b/g, ' ')
+    .replace(/\br\/[A-Za-z0-9_]+\s*•\s*[\w\s]+\s+ago\s+\S+\s+Report\b/i, ' ')
+    .replace(/\bReport\b/g, ' ')
+    .replace(/\bView in app\b/gi, ' ')
+    .replace(/\bThis video cannot be played\..*?Sorry, something went wrong when loading this video\./gi, ' ')
+    .replace(/`{3,}/g, ' ');
+
+  return normalizeText(slice);
+}
+
 function isNoiseLine(line) {
   return /^(skip to|go to |r\/|share$|report$|read more$|advertisement|promoted|about this ad|tired of ads|learn more$|comments section|moderator announcement|i am a bot|reddit rules|privacy policy|user agreement|your privacy choices|accessibility|expand navigation|collapse navigation|recaptcha|protected by|all rights reserved)/i.test(line);
 }
 
 function cleanScrapedRedditContent(rawText, title = '') {
+  const redditPost = extractMainRedditPost(rawText, title);
+  if (redditPost && redditPost.length > 80) {
+    return redditPost;
+  }
+
   const normalizedTitle = normalizeText(title).toLowerCase();
   const lines = (rawText || '')
     .split(/\r?\n+/)
@@ -476,6 +539,52 @@ async function searchWebForNeeds(searchQuery, community, queryKeywords, sourceLa
   return results;
 }
 
+function mergeCategories(results) {
+  const seen = new Set();
+  const categories = [];
+
+  for (const result of results) {
+    for (const category of result.categories || []) {
+      const key = `${category.type}:${category.matchedWord}`.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      categories.push(category);
+    }
+  }
+
+  return categories.slice(0, 6);
+}
+
+function aggregateFacebookSignals(results, community) {
+  if (!results.length) return [];
+
+  const sourceLines = results
+    .slice(0, 8)
+    .map((result, index) => {
+      const sourceText = result.snippet || result.fullContent || result.title;
+      return `${index + 1}. ${result.title}: ${sourceText}`;
+    });
+  const fullContent = sourceLines.join('\n\n');
+  const snippet = truncateText(fullContent, MAX_SNIPPET_LENGTH);
+  const relevanceScore = Math.min(5, Math.max(...results.map(result => result.relevanceScore || 1)) + Math.min(2, Math.floor(results.length / 3)));
+
+  return [{
+    id: `facebook-aggregate-${Date.now()}`,
+    title: `Facebook group signals for ${community.name || 'this community'}`,
+    url: community.url || results[0].url,
+    author: 'Facebook Group',
+    platform: 'Facebook Group',
+    source: 'Facebook Group public signals',
+    score: 0,
+    commentsCount: results.length,
+    categories: mergeCategories(results),
+    snippet,
+    fullContent,
+    rawContent: fullContent,
+    relevanceScore
+  }];
+}
+
 export async function analyzeCommunityNeeds(community) {
   if (!community?.platform) return [];
 
@@ -559,6 +668,12 @@ export async function analyzeCommunityNeeds(community) {
 
     if (deduped.length === 0) {
       return buildMetadataFallbackNeeds(community, queryKeywords);
+    }
+
+    if (community.platform === 'Facebook Group') {
+      const aggregated = aggregateFacebookSignals(deduped, community);
+      console.log(`  Found ${deduped.length} Facebook signals aggregated into ${aggregated.length} source for ${community.name}`);
+      return aggregated;
     }
 
     console.log(`  Found ${deduped.length} public need signals for ${community.name}`);

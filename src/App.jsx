@@ -102,6 +102,7 @@ export default function App() {
             initialSubreddit={selectedSubreddit} 
             initialCommunity={selectedCommunity}
             onClearSubreddit={() => { setSelectedSubreddit(''); setSelectedCommunity(null); }} 
+            onBackToSearch={() => setActiveTab('discover')}
             onSavedUpdate={updateSavedCount}
           />
         )}

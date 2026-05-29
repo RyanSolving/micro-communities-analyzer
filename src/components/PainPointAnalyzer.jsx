@@ -1,14 +1,91 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Sparkles, MessageSquare, ThumbsUp, Flame, ExternalLink, Bookmark } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ChevronUp, Search, MessageSquare, ThumbsUp, Flame, ExternalLink, Bookmark } from 'lucide-react';
 import SearchBar from './SearchBar.jsx';
 
-export default function PainPointAnalyzer({ initialSubreddit, initialCommunity, onClearSubreddit, onSavedUpdate }) {
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function splitIntoSentences(text) {
+  return (text || '')
+    .split(/(?<=[.!?])\s+|\n+/)
+    .map(sentence => sentence.trim())
+    .filter(Boolean);
+}
+
+function getHighlightTerms(categories = []) {
+  return categories
+    .map(category => category?.matchedWord)
+    .filter(Boolean)
+    .map(term => term.trim())
+    .filter(term => term.length >= 2);
+}
+
+function renderHighlightedSentence(sentence, terms) {
+  if (!terms.length) return sentence;
+
+  const pattern = new RegExp(`(${terms.map(escapeRegExp).join('|')})`, 'ig');
+  const parts = sentence.split(pattern);
+
+  return parts.map((part, index) => {
+    const isMatch = terms.some(term => part.toLowerCase() === term.toLowerCase());
+    if (!isMatch) return part;
+
+    return (
+      <mark
+        key={index}
+        style={{
+          background: 'rgba(245, 158, 11, 0.24)',
+          color: '#111827',
+          borderRadius: '4px',
+          padding: '0 0.15rem',
+          fontWeight: '700'
+        }}
+      >
+        {part}
+      </mark>
+    );
+  });
+}
+
+function HighlightedContent({ text, categories }) {
+  const terms = getHighlightTerms(categories);
+  const sentences = splitIntoSentences(text);
+
+  if (!sentences.length) return null;
+
+  return (
+    <>
+      {sentences.map((sentence, index) => {
+        const isHighlighted = terms.some(term => sentence.toLowerCase().includes(term.toLowerCase()));
+        return (
+          <span
+            key={index}
+            style={{
+              display: 'block',
+              marginBottom: index === sentences.length - 1 ? 0 : '0.45rem',
+              background: isHighlighted ? 'rgba(245, 158, 11, 0.10)' : 'transparent',
+              borderRadius: isHighlighted ? '5px' : 0,
+              padding: isHighlighted ? '0.08rem 0.18rem' : 0,
+              color: isHighlighted ? '#111827' : 'inherit'
+            }}
+          >
+            {renderHighlightedSentence(sentence, terms)}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
+export default function PainPointAnalyzer({ initialSubreddit, initialCommunity, onClearSubreddit, onBackToSearch, onSavedUpdate }) {
   const [subreddit, setSubreddit] = useState(initialSubreddit || '');
   const [analysisTarget, setAnalysisTarget] = useState(initialCommunity || null);
   const [loading, setLoading] = useState(false);
   const [opportunities, setOpportunities] = useState([]);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [expandedContentIds, setExpandedContentIds] = useState(new Set());
 
   useEffect(() => {
     if (initialCommunity) {
@@ -31,6 +108,7 @@ export default function PainPointAnalyzer({ initialSubreddit, initialCommunity, 
     setError('');
     setOpportunities([]);
     setSuccessMsg('');
+    setExpandedContentIds(new Set());
 
     try {
       const response = await fetch('/api/analyze-community', {
@@ -68,6 +146,7 @@ export default function PainPointAnalyzer({ initialSubreddit, initialCommunity, 
     setError('');
     setOpportunities([]);
     setSuccessMsg('');
+    setExpandedContentIds(new Set());
 
     try {
       const response = await fetch(`/api/analyze?subreddit=${encodeURIComponent(cleanSub)}`);
@@ -120,6 +199,26 @@ export default function PainPointAnalyzer({ initialSubreddit, initialCommunity, 
     }
   };
 
+  const toggleFullContent = (id) => {
+    setExpandedContentIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const handleBackToSearch = () => {
+    if (onBackToSearch) {
+      onBackToSearch();
+    } else if (onClearSubreddit) {
+      onClearSubreddit();
+    }
+  };
+
   const isPublicTarget = analysisTarget && analysisTarget.platform !== 'Reddit';
 
   return (
@@ -129,7 +228,7 @@ export default function PainPointAnalyzer({ initialSubreddit, initialCommunity, 
         background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(240, 243, 250, 0.95))',
         padding: '2.5rem'
       }}>
-        <h2 style={{ fontSize: '2rem', marginBottom: '0.5rem', fontFamily: 'Outfit', fontWeight: '800' }}>
+        <h2 style={{ fontSize: '2rem', marginBottom: '0.5rem', fontFamily: 'Outfit', fontWeight: '800', color: '#111827' }}>
           Pain Point & Need Analyzer
         </h2>
         <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', maxWidth: '600px', fontSize: '0.95rem' }}>
@@ -170,16 +269,22 @@ export default function PainPointAnalyzer({ initialSubreddit, initialCommunity, 
 
       {/* Opportunities List Section */}
       <section className="glass-panel" style={{ minHeight: '300px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem' }}>
-          <h3 style={{ fontSize: '1.3rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem', flexWrap: 'wrap' }}>
+          <h3 style={{ fontSize: '1.3rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#111827' }}>
             <Flame size={20} style={{ color: 'var(--accent-gold)' }} />
             Detected Money-Making Opportunities {opportunities.length > 0 && `(${opportunities.length})`}
           </h3>
-          {onClearSubreddit && (
-            <button className="btn-secondary" onClick={() => { setSubreddit(''); setOpportunities([]); onClearSubreddit(); }}>
-              Clear
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <button className="btn-secondary" onClick={handleBackToSearch}>
+              <ArrowLeft size={16} />
+              Back to Search
             </button>
-          )}
+            {onClearSubreddit && (
+              <button className="btn-secondary" onClick={() => { setSubreddit(''); setOpportunities([]); setExpandedContentIds(new Set()); onClearSubreddit(); }}>
+                Clear
+              </button>
+            )}
+          </div>
         </div>
 
         {successMsg && (
@@ -210,7 +315,14 @@ export default function PainPointAnalyzer({ initialSubreddit, initialCommunity, 
           </div>
         ) : opportunities.length > 0 ? (
           <div className="pain-point-list">
-            {opportunities.map((opp) => (
+            {opportunities.map((opp) => {
+              const isExpanded = expandedContentIds.has(opp.id);
+              const displayContent = isExpanded
+                ? (opp.fullContent || opp.rawContent || opp.snippet)
+                : (opp.snippet || opp.fullContent || opp.rawContent);
+              const canExpand = Boolean(opp.fullContent && opp.fullContent !== opp.snippet);
+
+              return (
               <article key={opp.id} className="pain-point-item">
                 <div className="pain-point-header">
                   <div style={{ flex: 1 }}>
@@ -235,7 +347,7 @@ export default function PainPointAnalyzer({ initialSubreddit, initialCommunity, 
                       target="_blank" 
                       rel="noopener noreferrer" 
                       className="pain-point-title"
-                      style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                      style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.25rem', color: '#111827' }}
                     >
                       {opp.title}
                       <ExternalLink size={14} style={{ color: 'var(--accent-primary)', flexShrink: 0 }} />
@@ -264,10 +376,23 @@ export default function PainPointAnalyzer({ initialSubreddit, initialCommunity, 
                   padding: '0.9rem',
                   borderRadius: '6px',
                   borderLeft: '3px solid var(--accent-primary)',
-                  whiteSpace: 'pre-wrap'
+                  whiteSpace: 'pre-wrap',
+                  maxHeight: isExpanded ? 'none' : '11rem',
+                  overflow: isExpanded ? 'visible' : 'hidden'
                 }}>
-                  {opp.fullContent || opp.rawContent || opp.snippet}
+                  <HighlightedContent text={displayContent} categories={opp.categories} />
                 </div>
+
+                {canExpand && (
+                  <button
+                    className="btn-secondary"
+                    onClick={() => toggleFullContent(opp.id)}
+                    style={{ padding: '0.4rem 0.65rem', fontSize: '0.82rem', marginBottom: '0.75rem' }}
+                  >
+                    {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                    {isExpanded ? 'Show Less' : 'Show Full Content'}
+                  </button>
+                )}
 
                 <div className="pain-point-meta">
                   {(opp.platform === 'Reddit' || !opp.platform) ? (
@@ -292,7 +417,8 @@ export default function PainPointAnalyzer({ initialSubreddit, initialCommunity, 
                   </span>
                 </div>
               </article>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '4rem 0', gap: '1rem', color: 'var(--text-dark)' }}>
