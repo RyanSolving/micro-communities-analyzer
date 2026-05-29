@@ -263,10 +263,10 @@ export async function analyzeSubredditNeeds(subredditName) {
 
 async function analyzeSubredditNeedsViaSearch(subreddit) {
   const searchQueries = [
-    `site:reddit.com/r/${subreddit} ${subreddit} help problem issue advice`,
-    `site:reddit.com/r/${subreddit} ${subreddit} recommend best tool`,
-    `site:reddit.com/r/${subreddit} ${subreddit} worth price cost`,
-    `site:reddit.com/r/${subreddit} ${subreddit} wish need`
+    `${subreddit} help problem issue advice`,
+    `${subreddit} recommend best tool`,
+    `${subreddit} worth price cost`,
+    `${subreddit} wish need`
   ];
 
   const results = [];
@@ -276,7 +276,12 @@ async function analyzeSubredditNeedsViaSearch(subreddit) {
     if (i > 0) await delay(500);
 
     try {
-      const webResults = await searchWeb(searchQueries[i], { limit: 10, scrape: true });
+      const webResults = await searchWeb(searchQueries[i], {
+        limit: 10,
+        scrape: true,
+        includeDomains: ['reddit.com'],
+        preferredProviders: ['firecrawl', 'brave', 'yahoo']
+      });
       for (const item of webResults) {
         if (!item.url || !item.url.toLowerCase().includes(`reddit.com/r/${subreddit.toLowerCase()}`)) continue;
 

@@ -144,15 +144,19 @@ export async function searchReddit(query) {
 
 async function searchRedditViaWeb(query) {
   const webQueries = [
-    `site:reddit.com/r ${query}`,
-    `reddit ${query} subreddit`,
-    `${query} reddit community`
+    `${query} subreddit`,
+    `${query} reddit community`,
+    `${query} reddit`
   ];
   const webResults = [];
 
   for (const webQuery of webQueries) {
     try {
-      const queryResults = await searchWeb(webQuery, { limit: 12 });
+      const queryResults = await searchWeb(webQuery, {
+        limit: 12,
+        includeDomains: ['reddit.com'],
+        preferredProviders: ['brave', 'firecrawl', 'yahoo']
+      });
       console.log(`  Reddit web query "${webQuery}" returned ${queryResults.length} results`);
       webResults.push(...queryResults);
     } catch (error) {
@@ -516,8 +520,9 @@ function matchesQueryIntent(query, ...values) {
 
 // searchViaMojeek removed — Mojeek no longer used
 
-async function searchViaDuckDuckGo(query, { siteFilter, defaultPlatform }) {
+async function unusedSearchViaDuckDuckGo() {
   return [];
+/*
   const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(`${query} ${siteFilter}`)}`;
   const html = await fetchDuckDuckGoHtml(searchUrl);
   const $ = cheerio.load(html);
@@ -565,4 +570,5 @@ async function searchViaDuckDuckGo(query, { siteFilter, defaultPlatform }) {
   });
 
   return results;
+*/
 }

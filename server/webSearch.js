@@ -11,12 +11,13 @@ export function cleanText(value) {
   return (value || '').replace(/\s+/g, ' ').trim();
 }
 
-export async function searchWeb(query, { limit = 20, scrape = false, includeDomains = [] } = {}) {
-  const providers = [
-    ...(FIRECRAWL_API_KEY ? ['firecrawl'] : []),
-    ...(BRAVE_SEARCH_API_KEY ? ['brave'] : []),
-    'yahoo'
-  ];
+export async function searchWeb(query, {
+  limit = 20,
+  scrape = false,
+  includeDomains = [],
+  preferredProviders = []
+} = {}) {
+  const providers = getProviderOrder(preferredProviders);
   const domainKey = includeDomains.join(',');
   const cacheKey = `${providers.join('+')}:${query}:${limit}:${scrape ? 'scrape' : 'serp'}:${domainKey}`;
   const cached = searchCache.get(cacheKey);
@@ -47,6 +48,23 @@ export async function searchWeb(query, { limit = 20, scrape = false, includeDoma
 
   searchCache.set(cacheKey, { createdAt: Date.now(), results });
   return results;
+}
+
+function getProviderOrder(preferredProviders) {
+  const available = {
+    firecrawl: Boolean(FIRECRAWL_API_KEY),
+    brave: Boolean(BRAVE_SEARCH_API_KEY),
+    yahoo: true
+  };
+  const defaults = [
+    ...(FIRECRAWL_API_KEY ? ['firecrawl'] : []),
+    ...(BRAVE_SEARCH_API_KEY ? ['brave'] : []),
+    'yahoo'
+  ];
+
+  return [...preferredProviders, ...defaults]
+    .filter(provider => available[provider])
+    .filter((provider, index, providers) => providers.indexOf(provider) === index);
 }
 
 function withSiteFilters(query, includeDomains) {
