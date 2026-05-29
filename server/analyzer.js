@@ -1,3 +1,5 @@
+import axios from 'axios';
+import * as cheerio from 'cheerio';
 import { redditGet } from './redditClient.js';
 import { scrapeUrl, searchWeb } from './webSearch.js';
 
@@ -157,31 +159,94 @@ function buildOpportunityText({ title, markdown, description }) {
   return { snippet, fullContent, rawContent };
 }
 
+const BROWSER_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+
+async function scrapeRedditPostViaOldReddit(url) {
+  try {
+    // Convert any reddit URL to old.reddit.com
+    const oldUrl = url.replace(/(?:www\.|new\.)?reddit\.com/, 'old.reddit.com');
+    const response = await axios.get(oldUrl, {
+      headers: {
+        'User-Agent': BROWSER_USER_AGENT,
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      timeout: 12000,
+      maxRedirects: 3
+    });
+
+    const $ = cheerio.load(response.data);
+
+    // Extract title
+    const title = $('a.title.may-blank').first().text().trim()
+      || $('p.title a').first().text().trim()
+      || $('title').text().replace(/ : .*$/, '').trim();
+
+    // Extract self-text (post body)
+    const selfText = $('.expando .md').first().text().trim()
+      || $('div.usertext-body .md').first().text().trim();
+
+    // Extract top comments for richer content
+    const comments = [];
+    $('.comment .entry .md').each((i, el) => {
+      if (i >= 5) return false; // top 5 comments
+      const text = $(el).text().trim();
+      if (text && text.length > 20) comments.push(text);
+    });
+
+    const markdown = [selfText, ...comments].filter(Boolean).join('\n\n');
+    if (!markdown || markdown.length < 30) return null;
+
+    return { title, markdown, description: selfText.slice(0, 300) };
+  } catch {
+    return null;
+  }
+}
+
 function needsFullContentHydration(item) {
   const markdownLength = item.markdown?.length || 0;
   const description = item.description || '';
-  return markdownLength < 800 || /\.\.\.|…/.test(description);
+  return markdownLength < 800 || /\.\.\.|\u2026/.test(description);
 }
 
 async function hydrateRedditSearchResult(item) {
   if (!needsFullContentHydration(item)) return item;
 
-  try {
-    const scraped = await scrapeUrl(item.url);
-    if (!scraped?.markdown || scraped.markdown.length < (item.markdown?.length || 0)) {
-      return item;
+  // Strategy 1: Try old.reddit.com HTML scraping (bypasses Firecrawl 403 on Reddit)
+  if (item.url && item.url.includes('reddit.com')) {
+    try {
+      const scraped = await scrapeRedditPostViaOldReddit(item.url);
+      if (scraped?.markdown && scraped.markdown.length > (item.markdown?.length || 0)) {
+        return {
+          ...item,
+          title: item.title || scraped.title,
+          description: item.description || scraped.description,
+          markdown: scraped.markdown
+        };
+      }
+    } catch (error) {
+      console.error(`  Old Reddit scrape failed for ${item.url}:`, error.message);
     }
-
-    return {
-      ...item,
-      title: item.title || scraped.title,
-      description: item.description || scraped.description,
-      markdown: scraped.markdown
-    };
-  } catch (error) {
-    console.error(`  Firecrawl scrape failed for Reddit result ${item.url}:`, error.message);
-    return item;
   }
+
+  // Strategy 2: Try Firecrawl scrape as fallback for non-Reddit URLs
+  if (!item.url?.includes('reddit.com')) {
+    try {
+      const scraped = await scrapeUrl(item.url);
+      if (scraped?.markdown && scraped.markdown.length > (item.markdown?.length || 0)) {
+        return {
+          ...item,
+          title: item.title || scraped.title,
+          description: item.description || scraped.description,
+          markdown: scraped.markdown
+        };
+      }
+    } catch (error) {
+      console.error(`  Firecrawl scrape failed for ${item.url}:`, error.message);
+    }
+  }
+
+  return item;
 }
 
 function classifyText(fullText) {
@@ -453,6 +518,43 @@ export async function analyzeSubredditNeeds(subredditName) {
 }
 
 async function analyzeSubredditNeedsViaSearch(subreddit) {
+  // Strategy A: Try fetching from old.reddit.com directly (HTML scraping)
+  try {
+    console.log(`  Trying old.reddit.com direct fetch for r/${subreddit}...`);
+    const posts = await fetchRedditPostsViaHtml(subreddit);
+    if (posts.length > 0) {
+      console.log(`  old.reddit.com returned ${posts.length} posts for r/${subreddit}`);
+      const opportunities = [];
+      for (const post of posts) {
+        if (post.stickied) continue;
+        const fullText = `${post.title}\n\n${post.body}`;
+        const { matchedCategories, score } = classifyText(fullText);
+        if (matchedCategories.length > 0) {
+          opportunities.push({
+            id: `old-reddit-${post.id || opportunities.length}`,
+            title: post.title,
+            url: post.url,
+            author: post.author || 'Reddit',
+            score: post.score || 0,
+            commentsCount: post.commentsCount || 0,
+            categories: matchedCategories,
+            snippet: post.body || '(No body text)',
+            fullContent: post.body || '(No body text)',
+            rawContent: fullText,
+            relevanceScore: score + (post.commentsCount > 10 ? 1 : 0) + (post.score > 20 ? 1 : 0)
+          });
+        }
+      }
+      if (opportunities.length > 0) {
+        console.log(`  Found ${opportunities.length} opportunities via old.reddit.com for r/${subreddit}`);
+        return opportunities.sort((a, b) => b.relevanceScore - a.relevanceScore);
+      }
+    }
+  } catch (error) {
+    console.error(`  old.reddit.com direct fetch failed for r/${subreddit}:`, error.message);
+  }
+
+  // Strategy B: Web search fallback
   const searchQueries = [
     `${subreddit} help problem issue advice`,
     `${subreddit} recommend best tool`,
@@ -469,7 +571,7 @@ async function analyzeSubredditNeedsViaSearch(subreddit) {
     try {
       const webResults = await searchWeb(searchQueries[i], {
         limit: 10,
-        scrape: true,
+        scrape: false,  // Don't try to Firecrawl-scrape Reddit URLs (always 403)
         includeDomains: ['reddit.com'],
         preferredProviders: ['firecrawl', 'brave', 'yahoo']
       });
@@ -480,6 +582,7 @@ async function analyzeSubredditNeedsViaSearch(subreddit) {
         if (seenUrls.has(normalizedUrl)) continue;
         seenUrls.add(normalizedUrl);
 
+        // Try old.reddit.com HTML scraping instead of Firecrawl
         const hydratedItem = await hydrateRedditSearchResult(item);
         const { snippet, fullContent, rawContent } = buildOpportunityText({
           title: hydratedItem.title || `Reddit signal in r/${subreddit}`,
@@ -512,6 +615,50 @@ async function analyzeSubredditNeedsViaSearch(subreddit) {
 
   console.log(`  Found ${results.length} web fallback opportunities in r/${subreddit}`);
   return results.sort((a, b) => b.relevanceScore - a.relevanceScore);
+}
+
+// Fetch posts from old.reddit.com via HTML scraping when API is blocked
+async function fetchRedditPostsViaHtml(subreddit) {
+  try {
+    const response = await axios.get(`https://old.reddit.com/r/${subreddit}/hot`, {
+      headers: {
+        'User-Agent': BROWSER_USER_AGENT,
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      timeout: 15000,
+      maxRedirects: 3
+    });
+
+    const $ = cheerio.load(response.data);
+    const posts = [];
+
+    $('div.thing').each((i, el) => {
+      if (posts.length >= 50) return false;
+
+      const $el = $(el);
+      const stickied = $el.hasClass('stickied');
+      const title = $el.find('a.title.may-blank').text().trim();
+      const permalink = $el.attr('data-permalink') || $el.find('a.title.may-blank').attr('href') || '';
+      const url = permalink.startsWith('http') ? permalink : `https://www.reddit.com${permalink}`;
+      const author = $el.attr('data-author') || '';
+      const scoreText = $el.find('.score.unvoted').attr('title') || $el.find('.score.likes').text() || '0';
+      const score = parseInt(scoreText, 10) || 0;
+      const commentsText = $el.find('a.comments').text() || '0';
+      const commentsCount = parseInt(commentsText, 10) || 0;
+      const body = $el.find('.expando .md').text().trim();
+      const id = $el.attr('data-fullname') || `post-${i}`;
+
+      if (title) {
+        posts.push({ id, title, url, author, score, commentsCount, body, stickied });
+      }
+    });
+
+    return posts;
+  } catch (error) {
+    console.error(`  old.reddit.com HTML fetch failed for r/${subreddit}:`, error.message);
+    return [];
+  }
 }
 
 async function searchWebForNeeds(searchQuery, community, queryKeywords, sourceLabel = community.platform) {
