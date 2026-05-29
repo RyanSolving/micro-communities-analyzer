@@ -90,12 +90,12 @@ export default function App() {
 
       {/* Main Page Rendering */}
       <main style={{ flex: 1 }}>
-        {activeTab === 'discover' && (
+        <div style={{ display: activeTab === 'discover' ? 'block' : 'none' }}>
           <Dashboard 
             onAnalyze={handleAnalyzeCommunity} 
             onSavedUpdate={updateSavedCount} 
           />
-        )}
+        </div>
         
         {activeTab === 'analyzer' && (
           <PainPointAnalyzer 
