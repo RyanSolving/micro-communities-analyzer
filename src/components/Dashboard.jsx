@@ -227,6 +227,36 @@ export default function Dashboard({ onAnalyze, onSavedUpdate, scrollToResults })
     return true;
   });
 
+  // Merge all Facebook Group results into a single card
+  const displayResults = (() => {
+    const facebookItems = filteredResults.filter(r => r.platform === 'Facebook Group');
+    const otherItems = filteredResults.filter(r => r.platform !== 'Facebook Group');
+
+    if (facebookItems.length === 0) return otherItems;
+
+    const totalMembers = facebookItems.reduce((sum, g) => sum + (g.memberCount || 0), 0);
+    const groupNames = facebookItems.map(g => g.name || g.title).filter(Boolean);
+    const mergedCard = {
+      id: 'merged-facebook-groups',
+      name: `Facebook Groups (${facebookItems.length})`,
+      title: `${facebookItems.length} Facebook Groups found`,
+      platform: 'Facebook Group',
+      url: facebookItems[0].url,
+      description: groupNames.length > 0
+        ? `Includes: ${groupNames.slice(0, 4).join(', ')}${groupNames.length > 4 ? `, +${groupNames.length - 4} more` : ''}`
+        : `${facebookItems.length} Facebook Groups matching your search.`,
+      memberCount: totalMembers || null,
+      activeCount: null,
+      isNsfw: false,
+      tags: ['Merged'],
+      monetizationScore: facebookItems.some(g => g.monetizationScore === 'High') ? 'High' : 'Medium',
+      nicheSpecificity: facebookItems.some(g => g.nicheSpecificity === 'High') ? 'High' : 'Medium',
+      subGroups: facebookItems
+    };
+
+    return [...otherItems, mergedCard];
+  })();
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
       {/* Search Input Banner */}
@@ -378,15 +408,15 @@ export default function Dashboard({ onAnalyze, onSavedUpdate, scrollToResults })
               <div className="loading-pulse" style={{ width: '3rem', height: '3rem', borderWidth: '4px' }}></div>
               <p style={{ color: 'var(--text-muted)', fontSize: '1.1rem', fontWeight: '500' }}>Scanning platforms for micro-communities...</p>
             </div>
-          ) : filteredResults.length > 0 ? (
+          ) : displayResults.length > 0 ? (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                 <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-                  Showing <strong>{filteredResults.length}</strong> matching micro-communities
+                  Showing <strong>{displayResults.length}</strong> matching micro-communities
                 </span>
               </div>
               <div className="card-grid">
-                {filteredResults.map((item) => (
+                {displayResults.map((item) => (
                   <CommunityCard
                     key={item.id}
                     community={item}

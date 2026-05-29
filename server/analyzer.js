@@ -809,7 +809,7 @@ function aggregateFacebookSignals(results, community) {
   const relevanceScore = Math.min(5, Math.max(...results.map(result => result.relevanceScore || 1)) + Math.min(2, Math.floor(results.length / 3)));
 
   return [{
-    id: `facebook-aggregate-${Date.now()}`,
+    id: `facebook-aggregate-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
     title: `Facebook group signals for ${community.name || 'this community'}`,
     url: community.url || results[0].url,
     author: 'Facebook Group',
@@ -827,6 +827,24 @@ function aggregateFacebookSignals(results, community) {
 
 export async function analyzeCommunityNeeds(community) {
   if (!community?.platform) return [];
+
+  // If this is a merged community containing multiple subGroups, analyze each subGroup recursively
+  if (community.subGroups && Array.isArray(community.subGroups)) {
+    console.log(`  Analyzing merged community with ${community.subGroups.length} subGroups.`);
+    const results = await Promise.all(
+      community.subGroups.map(async (sub) => {
+        try {
+          return await analyzeCommunityNeeds({ ...sub, subGroups: undefined });
+        } catch (err) {
+          console.error(`Failed to analyze subGroup: ${sub.name || sub.url}`, err.message);
+          return [];
+        }
+      })
+    );
+    // Combine all opportunities and sort by relevanceScore descending
+    const combined = results.flat();
+    return combined.sort((a, b) => b.relevanceScore - a.relevanceScore);
+  }
 
   if (community.platform === 'Reddit') {
     const subredditFromUrl = community.url?.match(/reddit\.com\/r\/([^/]+)/i)?.[1];

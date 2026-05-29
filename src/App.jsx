@@ -104,12 +104,9 @@ export default function App() {
             onClearSubreddit={() => { setSelectedSubreddit(''); setSelectedCommunity(null); }} 
             onBackToSearch={() => {
               setActiveTab('discover');
-              // Scroll to the results section so user lands on their community cards
+              // Scroll to the top of the page to show the full Discover screen
               setTimeout(() => {
-                const resultsEl = document.getElementById('results-section');
-                if (resultsEl) {
-                  resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
+                window.scrollTo({ top: 0, behavior: 'smooth' });
               }, 50);
             }}
             onSavedUpdate={updateSavedCount}

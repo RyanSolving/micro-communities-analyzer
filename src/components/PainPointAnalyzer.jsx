@@ -316,12 +316,7 @@ export default function PainPointAnalyzer({ initialSubreddit, initialCommunity, 
         ) : opportunities.length > 0 ? (
           <div className="pain-point-list">
             {opportunities.map((opp) => {
-              const isExpanded = expandedContentIds.has(opp.id);
-              const isRedditOpportunity = opp.platform === 'Reddit' || !opp.platform;
               const fullText = opp.fullContent || opp.rawContent || opp.snippet || '';
-              const snippetText = opp.snippet || '';
-              const displayContent = isExpanded ? fullText : snippetText || fullText;
-              const canExpand = fullText.length > 300 || fullText.includes('\n');
 
               return (
               <article key={opp.id} className="pain-point-item">
@@ -377,35 +372,10 @@ export default function PainPointAnalyzer({ initialSubreddit, initialCommunity, 
                   padding: '0.9rem',
                   borderRadius: '6px',
                   borderLeft: '3px solid var(--accent-primary)',
-                  whiteSpace: 'pre-wrap',
-                  maxHeight: isExpanded ? 'none' : '8rem',
-                  overflow: isExpanded ? 'visible' : 'hidden',
-                  position: 'relative'
+                  whiteSpace: 'pre-wrap'
                 }}>
-                  <HighlightedContent text={displayContent} categories={opp.categories} />
-                  {!isExpanded && canExpand && (
-                    <div style={{
-                      position: 'absolute',
-                      bottom: 0,
-                      left: 0,
-                      right: 0,
-                      height: '2.5rem',
-                      background: 'linear-gradient(transparent, rgba(249, 249, 249, 0.95))',
-                      pointerEvents: 'none'
-                    }} />
-                  )}
+                  <HighlightedContent text={fullText} categories={opp.categories} />
                 </div>
-
-                {canExpand && (
-                  <button
-                    className="btn-secondary"
-                    onClick={() => toggleFullContent(opp.id)}
-                    style={{ padding: '0.4rem 0.65rem', fontSize: '0.82rem', marginBottom: '0.75rem' }}
-                  >
-                    {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                    {isExpanded ? 'Show Less' : 'Show Full Content'}
-                  </button>
-                )}
 
                 <div className="pain-point-meta">
                   {(opp.platform === 'Reddit' || !opp.platform) ? (
