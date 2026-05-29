@@ -11,31 +11,59 @@ export function cleanText(value) {
   return (value || '').replace(/\s+/g, ' ').trim();
 }
 
-export async function searchWeb(query, { limit = 20, scrape = false } = {}) {
-  const provider = FIRECRAWL_API_KEY ? 'firecrawl' : BRAVE_SEARCH_API_KEY ? 'brave' : 'yahoo';
-  console.log(`  Web search provider: ${provider} (${limit} results)`);
-  const cacheKey = `${provider}:${query}:${limit}:${scrape ? 'scrape' : 'serp'}`;
+export async function searchWeb(query, { limit = 20, scrape = false, includeDomains = [] } = {}) {
+  const providers = [
+    ...(FIRECRAWL_API_KEY ? ['firecrawl'] : []),
+    ...(BRAVE_SEARCH_API_KEY ? ['brave'] : []),
+    'yahoo'
+  ];
+  const domainKey = includeDomains.join(',');
+  const cacheKey = `${providers.join('+')}:${query}:${limit}:${scrape ? 'scrape' : 'serp'}:${domainKey}`;
   const cached = searchCache.get(cacheKey);
   if (cached && Date.now() - cached.createdAt < 10 * 60 * 1000) {
     return cached.results;
   }
 
-  const results = provider === 'firecrawl'
-    ? await searchViaFirecrawl(query, { limit, scrape })
-    : provider === 'brave'
-      ? await searchViaBrave(query, limit)
-      : await searchViaYahoo(query, limit);
+  let results = [];
+  for (const provider of providers) {
+    try {
+      console.log(`  Web search provider: ${provider} (${limit} results)`);
+      const providerQuery = provider === 'firecrawl'
+        ? query
+        : withSiteFilters(query, includeDomains);
+
+      results = provider === 'firecrawl'
+        ? await searchViaFirecrawl(providerQuery, { limit, scrape, includeDomains })
+        : provider === 'brave'
+          ? await searchViaBrave(providerQuery, limit)
+          : await searchViaYahoo(providerQuery, limit);
+
+      if (results.length > 0) break;
+      console.log(`  ${provider} returned 0 results; trying next provider...`);
+    } catch (error) {
+      console.error(`  ${provider} search failed:`, error.message);
+    }
+  }
 
   searchCache.set(cacheKey, { createdAt: Date.now(), results });
   return results;
 }
 
-async function searchViaFirecrawl(query, { limit, scrape }) {
+function withSiteFilters(query, includeDomains) {
+  if (!includeDomains.length) return query;
+
+  const siteQuery = includeDomains.map(domain => `site:${domain}`).join(' OR ');
+  return `(${siteQuery}) ${query}`;
+}
+
+async function searchViaFirecrawl(query, { limit, scrape, includeDomains }) {
   const response = await axios.post(
     'https://api.firecrawl.dev/v2/search',
     {
       query,
       limit: Math.min(limit, 30),
+      sources: ['web'],
+      ...(includeDomains.length ? { includeDomains } : {}),
       ...(scrape ? { scrapeOptions: { formats: [{ type: 'markdown' }] } } : {})
     },
     {
@@ -47,11 +75,20 @@ async function searchViaFirecrawl(query, { limit, scrape }) {
     }
   );
 
-  const data = Array.isArray(response.data?.data) ? response.data.data : [];
+  const data = Array.isArray(response.data?.data?.web)
+    ? response.data.data.web
+    : Array.isArray(response.data?.data)
+      ? response.data.data
+      : [];
+
+  if (response.data?.success === false) {
+    throw new Error(response.data?.error || 'Firecrawl search failed');
+  }
+
   return data.map((item) => ({
-    title: cleanText(item.title),
-    url: item.url,
-    description: cleanText(item.description),
+    title: cleanText(item.title || item.metadata?.title),
+    url: item.url || item.metadata?.sourceURL || item.metadata?.url,
+    description: cleanText(item.description || item.snippet || item.metadata?.description),
     markdown: cleanText(item.markdown)
   }));
 }
