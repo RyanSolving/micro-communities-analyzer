@@ -142,7 +142,7 @@ const ICON_MAP = {
   Cpu, Palette, Zap, Dumbbell, DollarSign, Gamepad2, Utensils, GraduationCap, Heart, Wrench
 };
 
-export default function Dashboard({ onAnalyze, onSavedUpdate }) {
+export default function Dashboard({ onAnalyze, onSavedUpdate, scrollToResults }) {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState([]);
@@ -355,7 +355,7 @@ export default function Dashboard({ onAnalyze, onSavedUpdate }) {
         </aside>
 
         {/* Results Container */}
-        <section style={{ flex: 1 }}>
+        <section id="results-section" style={{ flex: 1 }}>
           {error && (
             <div style={{
               display: 'flex',

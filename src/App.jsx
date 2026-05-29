@@ -102,7 +102,16 @@ export default function App() {
             initialSubreddit={selectedSubreddit} 
             initialCommunity={selectedCommunity}
             onClearSubreddit={() => { setSelectedSubreddit(''); setSelectedCommunity(null); }} 
-            onBackToSearch={() => setActiveTab('discover')}
+            onBackToSearch={() => {
+              setActiveTab('discover');
+              // Scroll to the results section so user lands on their community cards
+              setTimeout(() => {
+                const resultsEl = document.getElementById('results-section');
+                if (resultsEl) {
+                  resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+              }, 50);
+            }}
             onSavedUpdate={updateSavedCount}
           />
         )}
