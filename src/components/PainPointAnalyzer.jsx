@@ -318,12 +318,10 @@ export default function PainPointAnalyzer({ initialSubreddit, initialCommunity, 
             {opportunities.map((opp) => {
               const isExpanded = expandedContentIds.has(opp.id);
               const isRedditOpportunity = opp.platform === 'Reddit' || !opp.platform;
-              const displayContent = isRedditOpportunity
-                ? (opp.fullContent || opp.rawContent || opp.snippet)
-                : isExpanded
-                ? (opp.fullContent || opp.rawContent || opp.snippet)
-                : (opp.snippet || opp.fullContent || opp.rawContent);
-              const canExpand = !isRedditOpportunity && Boolean(opp.fullContent && opp.fullContent !== opp.snippet);
+              const fullText = opp.fullContent || opp.rawContent || opp.snippet || '';
+              const snippetText = opp.snippet || '';
+              const displayContent = isExpanded ? fullText : snippetText || fullText;
+              const canExpand = fullText.length > 300 || fullText.includes('\n');
 
               return (
               <article key={opp.id} className="pain-point-item">
@@ -380,10 +378,22 @@ export default function PainPointAnalyzer({ initialSubreddit, initialCommunity, 
                   borderRadius: '6px',
                   borderLeft: '3px solid var(--accent-primary)',
                   whiteSpace: 'pre-wrap',
-                  maxHeight: isRedditOpportunity || isExpanded ? 'none' : '11rem',
-                  overflow: isRedditOpportunity || isExpanded ? 'visible' : 'hidden'
+                  maxHeight: isExpanded ? 'none' : '8rem',
+                  overflow: isExpanded ? 'visible' : 'hidden',
+                  position: 'relative'
                 }}>
                   <HighlightedContent text={displayContent} categories={opp.categories} />
+                  {!isExpanded && canExpand && (
+                    <div style={{
+                      position: 'absolute',
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      height: '2.5rem',
+                      background: 'linear-gradient(transparent, rgba(249, 249, 249, 0.95))',
+                      pointerEvents: 'none'
+                    }} />
+                  )}
                 </div>
 
                 {canExpand && (
