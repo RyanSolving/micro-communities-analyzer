@@ -18,56 +18,6 @@ app.use((req, res, next) => {
 });
 
 // Endpoint: Search micro-communities
-app.get('/api/debug-env', (req, res) => {
-  res.json({
-    hasClientId: !!process.env.REDDIT_CLIENT_ID,
-    hasClientSecret: !!process.env.REDDIT_CLIENT_SECRET,
-    clientIdLength: process.env.REDDIT_CLIENT_ID ? process.env.REDDIT_CLIENT_ID.length : 0,
-    nodeEnv: process.env.NODE_ENV || 'not set'
-  });
-});
-
-app.get('/api/test-yahoo', async (req, res) => {
-  const axios = (await import('axios')).default;
-  const cheerio = await import('cheerio');
-  const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
-
-  const queries = [
-    { name: 'skool_site', q: 'site:skool.com knitting' },
-    { name: 'reddit_site_no_slash', q: 'site:reddit.com knitting' },
-    { name: 'reddit_url_quoted', q: '"reddit.com/r/" knitting' },
-    { name: 'reddit_keywords', q: 'reddit knitting subreddit' },
-    { name: 'reddit_site_with_slash', q: 'site:reddit.com/r/ knitting' }
-  ];
-
-  const results = [];
-
-  for (const item of queries) {
-    const searchUrl = `https://search.yahoo.com/search?p=${encodeURIComponent(item.q)}`;
-    try {
-      const response = await axios.get(searchUrl, {
-        headers: { 'User-Agent': userAgent },
-        timeout: 8000
-      });
-      const $ = cheerio.load(response.data);
-      const count = $('.algo').length;
-      results.push({ name: item.name, success: true, count, status: response.status });
-    } catch (err) {
-      results.push({ 
-        name: item.name, 
-        success: false, 
-        error: err.message, 
-        code: err.code,
-        status: err.response ? err.response.status : null 
-      });
-    }
-    // Small delay between requests
-    await new Promise(resolve => setTimeout(resolve, 1000));
-  }
-
-  res.json({ results });
-});
-
 app.get('/api/search', async (req, res) => {
   const query = req.query.q;
   if (!query) {

@@ -1,9 +1,5 @@
-import axios from 'axios';
-import * as cheerio from 'cheerio';
-
-// Reddit's JSON API blocks browser-spoofing UAs (403). Use a descriptive bot UA.
-const USER_AGENT = 'NicheGlow/1.0 (micro-communities research tool)';
-const BROWSER_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+import { redditGet } from './redditClient.js';
+import { searchWeb } from './webSearch.js';
 
 // Define categorization patterns — much broader to catch real-world language
 const PATTERNS = {
@@ -53,20 +49,6 @@ function classifyText(fullText) {
   }
 
   return { matchedCategories, score };
-}
-
-function normalizeSearchUrl(rawUrl) {
-  if (!rawUrl) return null;
-
-  try {
-    const parsed = new URL(rawUrl, 'https://www.mojeek.com');
-    if (parsed.hostname.includes('mojeek.com')) {
-      return parsed.searchParams.get('u') || parsed.searchParams.get('url') || null;
-    }
-    return parsed.href;
-  } catch {
-    return null;
-  }
 }
 
 function getCommunityQuery(community) {
@@ -188,17 +170,16 @@ function buildMetadataFallbackNeeds(community, queryKeywords) {
 }
 
 // Fetch posts from a single Reddit listing endpoint
-async function fetchRedditPosts(subreddit, sort, limit = 30) {
+async function fetchRedditPosts(subreddit, listing, { limit = 30, t } = {}) {
   try {
-    const url = `https://www.reddit.com/r/${subreddit}/${sort}.json?limit=${limit}&raw_json=1`;
-    const response = await axios.get(url, {
-      headers: { 'User-Agent': USER_AGENT },
+    const response = await redditGet(`/r/${subreddit}/${listing}`, {
+      params: { limit, ...(t ? { t } : {}) },
       timeout: 15000
     });
     if (!response.data?.data?.children) return [];
     return response.data.data.children;
   } catch (error) {
-    console.error(`  Error fetching /${sort} for r/${subreddit}:`, error.message);
+    console.error(`  Error fetching /${listing} for r/${subreddit}:`, error.message);
     return [];
   }
 }
@@ -213,9 +194,9 @@ export async function analyzeSubredditNeeds(subredditName) {
 
     // Fetch from hot, new, AND top (weekly) in parallel for much broader coverage
     const [hotPosts, newPosts, topPosts] = await Promise.all([
-      fetchRedditPosts(cleanSubreddit, 'hot', 30),
-      fetchRedditPosts(cleanSubreddit, 'new', 30),
-      fetchRedditPosts(cleanSubreddit, 'top?t=week', 25)
+      fetchRedditPosts(cleanSubreddit, 'hot', { limit: 30 }),
+      fetchRedditPosts(cleanSubreddit, 'new', { limit: 30 }),
+      fetchRedditPosts(cleanSubreddit, 'top', { limit: 25, t: 'week' })
     ]);
 
     // Deduplicate by post ID
@@ -230,6 +211,11 @@ export async function analyzeSubredditNeeds(subredditName) {
     }
 
     console.log(`  Total unique posts to analyze: ${allPosts.length}`);
+
+    if (allPosts.length === 0) {
+      console.log(`  Reddit listings unavailable for r/${cleanSubreddit}; using web search fallback...`);
+      return analyzeSubredditNeedsViaSearch(cleanSubreddit);
+    }
 
     const opportunities = [];
 
@@ -275,34 +261,69 @@ export async function analyzeSubredditNeeds(subredditName) {
   }
 }
 
-async function searchMojeekForNeeds(searchQuery, community, queryKeywords, sourceLabel = community.platform) {
-  const searchUrl = `https://www.mojeek.com/search?q=${encodeURIComponent(searchQuery)}`;
-  const response = await axios.get(searchUrl, {
-    headers: {
-      'User-Agent': BROWSER_USER_AGENT,
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      'Accept-Language': 'en-US,en;q=0.9',
-    },
-    timeout: 12000
-  });
+async function analyzeSubredditNeedsViaSearch(subreddit) {
+  const searchQueries = [
+    `site:reddit.com/r/${subreddit} ${subreddit} help problem issue advice`,
+    `site:reddit.com/r/${subreddit} ${subreddit} recommend best tool`,
+    `site:reddit.com/r/${subreddit} ${subreddit} worth price cost`,
+    `site:reddit.com/r/${subreddit} ${subreddit} wish need`
+  ];
 
-  const $ = cheerio.load(response.data);
+  const results = [];
+  const seenUrls = new Set();
+
+  for (let i = 0; i < searchQueries.length; i++) {
+    if (i > 0) await delay(500);
+
+    try {
+      const webResults = await searchWeb(searchQueries[i], { limit: 10, scrape: true });
+      for (const item of webResults) {
+        if (!item.url || !item.url.toLowerCase().includes(`reddit.com/r/${subreddit.toLowerCase()}`)) continue;
+
+        const normalizedUrl = item.url.replace(/\/+$/, '').split('?')[0].split('#')[0].toLowerCase();
+        if (seenUrls.has(normalizedUrl)) continue;
+        seenUrls.add(normalizedUrl);
+
+        const fullContent = item.markdown || item.description || '(No body text)';
+        const fullText = `${item.title || ''}\n\n${fullContent}`;
+        const { matchedCategories, score } = classifyText(fullText);
+        if (matchedCategories.length === 0) continue;
+
+        results.push({
+          id: `web-reddit-${results.length}-${Date.now()}`,
+          title: item.title || `Reddit signal in r/${subreddit}`,
+          url: item.url,
+          author: 'Reddit',
+          platform: 'Reddit',
+          source: 'Public web search',
+          score: 0,
+          commentsCount: 0,
+          categories: matchedCategories,
+          snippet: fullContent,
+          fullContent,
+          rawContent: fullText,
+          relevanceScore: score
+        });
+      }
+    } catch (error) {
+      console.error(`  Reddit web analysis fallback failed for "${searchQueries[i]}":`, error.message);
+    }
+  }
+
+  console.log(`  Found ${results.length} web fallback opportunities in r/${subreddit}`);
+  return results.sort((a, b) => b.relevanceScore - a.relevanceScore);
+}
+
+async function searchWebForNeeds(searchQuery, community, queryKeywords, sourceLabel = community.platform) {
+  const webResults = await searchWeb(searchQuery, { limit: 10, scrape: true });
   const results = [];
 
-  $('.results li').each((index, element) => {
-    const el = $(element);
-    let linkEl = el.find('h2 a.title[href], h3 a.title[href], a.title[href]').first();
-    if (!linkEl.length) {
-      linkEl = el.find('h2 a[href], h3 a[href], a[href]').first();
-    }
-
-    const url = normalizeSearchUrl(linkEl.attr('href'));
-    const title = linkEl.text().trim();
+  webResults.forEach((item, index) => {
+    const url = item.url;
+    const title = item.title;
     if (!url || !title) return;
 
-    let snippet = el.find('p.s').first().text().trim();
-    if (!snippet) snippet = el.find('.desc').first().text().trim();
-    if (!snippet) snippet = el.find('p:not(.i)').first().text().trim();
+    const snippet = item.markdown || item.description || '';
 
     if (!isRelevantToCommunity(queryKeywords, title, snippet, url)) return;
 
@@ -357,7 +378,7 @@ export async function analyzeCommunityNeeds(community) {
     for (let i = 0; i < needQueries.length; i++) {
       if (i > 0) await delay(500);
       try {
-        const queryResults = await searchMojeekForNeeds(needQueries[i], community, queryKeywords, community.platform);
+        const queryResults = await searchWebForNeeds(needQueries[i], community, queryKeywords, community.platform);
         results.push(...queryResults);
       } catch (error) {
         console.error(`  Public need search failed for "${needQueries[i]}":`, error.message);
@@ -384,7 +405,7 @@ export async function analyzeCommunityNeeds(community) {
       for (let i = 0; i < broaderQueries.length; i++) {
         await delay(500);
         try {
-          const broaderResults = await searchMojeekForNeeds(
+          const broaderResults = await searchWebForNeeds(
             broaderQueries[i],
             community,
             queryKeywords,

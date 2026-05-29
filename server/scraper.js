@@ -1,15 +1,11 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
+import { redditGet } from './redditClient.js';
+import { cleanText, searchWeb } from './webSearch.js';
 
-// Reddit's JSON API now blocks browser-spoofing UAs (403). Use a descriptive bot UA for Reddit.
-const REDDIT_USER_AGENT = 'NicheGlow/1.0 (micro-communities research tool)';
-// Search scrapers need a browser-like UA.
 const BROWSER_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 const MAX_MEMBER_THRESHOLD = 100000;
-const execFileAsync = promisify(execFile);
 
 const GENERIC_TERMS = [
   'funny', 'pics', 'memes', 'gaming', 'music', 'movies', 'news', 'videos',
@@ -93,16 +89,15 @@ function identifyPlatform(url) {
 
 // ============================================================
 // 1. Reddit Subreddit Search
-//    Tries the official JSON API first. If it fails (e.g. 403
-//    from datacenter IPs), falls back to DuckDuckGo scraping.
+//    Uses official OAuth when configured, then falls back to
+//    web discovery for subreddit landing pages.
 // ============================================================
 export async function searchReddit(query) {
-  // --- Strategy 1: Reddit JSON API ---
+  // --- Strategy 1: Reddit API, preferably through OAuth ---
   try {
-    const searchUrl = `https://www.reddit.com/subreddits/search.json?q=${encodeURIComponent(query)}&limit=50`;
-    const response = await axios.get(searchUrl, {
-      headers: { 'User-Agent': REDDIT_USER_AGENT },
-      timeout: 5000
+    const response = await redditGet('/subreddits/search', {
+      params: { q: query, limit: 50, sort: 'relevance' },
+      timeout: 10000
     });
 
     if (response.data?.data?.children?.length > 0) {
@@ -134,34 +129,28 @@ export async function searchReddit(query) {
       return subreddits;
     }
   } catch (error) {
-    console.error('  Reddit API failed:', error.message, '— falling back to DuckDuckGo...');
+    console.error('  Reddit API failed:', error.message, '- falling back to web search...');
   }
 
-  // --- Strategy 2: DuckDuckGo fallback for Reddit ---
+  // --- Strategy 2: Web fallback for Reddit ---
   try {
-    console.log(`  Searching Reddit via DuckDuckGo fallback...`);
-    return await searchRedditViaDuckDuckGo(query);
+    console.log('  Searching Reddit via web fallback...');
+    return await searchRedditViaWeb(query);
   } catch (err) {
-    console.error('  DuckDuckGo Reddit fallback also failed:', err.message);
+    console.error('  Reddit web fallback also failed:', err.message);
     return [];
   }
 }
 
-// Scrape DuckDuckGo for Reddit subreddit pages when the API is blocked
-async function searchRedditViaDuckDuckGo(query) {
-  const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(`${query} site:reddit.com/r/`)}`;
-  const html = await fetchDuckDuckGoHtml(searchUrl);
-  const $ = cheerio.load(html);
+async function searchRedditViaWeb(query) {
+  const webResults = await searchWeb(`${query} "reddit.com/r/"`, { limit: 20 });
   const results = [];
   const seenSubs = new Set();
 
-  $('.web-result').each((index, element) => {
-    const el = $(element);
-    const linkEl = el.find('a.result__a[href]').first();
-    const url = normalizeDuckDuckGoUrl(linkEl.attr('href'));
+  webResults.forEach((item) => {
+    const url = item.url;
     if (!url) return;
 
-    // Only keep subreddit landing pages (reddit.com/r/NAME/)
     const subredditMatch = url.match(/reddit\.com\/r\/([a-zA-Z0-9_]+)/i);
     if (!subredditMatch) return;
 
@@ -170,16 +159,15 @@ async function searchRedditViaDuckDuckGo(query) {
     if (seenSubs.has(subKey)) return;
     seenSubs.add(subKey);
 
-    const title = linkEl.text().replace(/\s+/g, ' ').trim();
-    const description = el.find('.result__snippet').first().text().replace(/\s+/g, ' ').trim();
+    const title = cleanText(item.title);
+    const description = cleanText(item.description);
     const parsedMembers = parseMemberCount(description) || parseMemberCount(title);
 
-    // Skip if members exceed threshold
     if (parsedMembers && parsedMembers > MAX_MEMBER_THRESHOLD) return;
 
     const name = `r/${subName}`;
     results.push({
-      id: `ddg-reddit-${subKey}-${Date.now()}`,
+      id: `web-reddit-${subKey}-${Date.now()}`,
       name,
       title: title || name,
       platform: 'Reddit',
@@ -195,34 +183,25 @@ async function searchRedditViaDuckDuckGo(query) {
     });
   });
 
-  console.log(`  DuckDuckGo Reddit fallback returned ${results.length} communities`);
+  console.log(`  Reddit web fallback returned ${results.length} communities`);
   return results;
 }
 
 // ============================================================
-// 2. Multi-platform search via DuckDuckGo + Circle Discovery
+// 2. Multi-platform search via unified web query + Circle Discovery
 // ============================================================
 export async function searchOtherPlatforms(query) {
-  const platformSearches = [
-    { siteFilter: 'site:skool.com', defaultPlatform: 'Skool' },
-    { siteFilter: 'site:circle.so', defaultPlatform: 'Circle.so' },
-    { siteFilter: 'site:mn.co', defaultPlatform: 'Mighty Networks' },
-    { siteFilter: 'site:facebook.com/groups', defaultPlatform: 'Facebook Group' },
-    { siteFilter: 'site:disboard.org', defaultPlatform: 'Discord' }
-  ];
-
   const results = [];
 
-  // Fire all searches in parallel: DuckDuckGo site queries + Circle Discovery API
-  const ddgPromises = platformSearches.map(async (cfg) => {
+  const webPromise = (async () => {
     try {
-      console.log(`  Querying DuckDuckGo for: "${cfg.siteFilter} ${query}"...`);
-      return await searchViaDuckDuckGo(query, cfg);
+      console.log(`  Querying unified web search for public platform pages: "${query}"...`);
+      return await searchUnifiedPlatformWeb(query);
     } catch (err) {
-      console.error(`  DuckDuckGo search for ${cfg.siteFilter} failed:`, err.message);
+      console.error('  Unified platform web search failed:', err.message);
       return [];
     }
-  });
+  })();
 
   const circlePromise = (async () => {
     try {
@@ -234,7 +213,7 @@ export async function searchOtherPlatforms(query) {
     }
   })();
 
-  const allResultsArray = await Promise.all([...ddgPromises, circlePromise]);
+  const allResultsArray = await Promise.all([webPromise, circlePromise]);
   for (const subResults of allResultsArray) {
     results.push(...subResults);
   }
@@ -252,6 +231,66 @@ export async function searchOtherPlatforms(query) {
 
   console.log(`  Non-Reddit results: ${combined.length} from web discovery`);
   return combined;
+}
+
+async function searchUnifiedPlatformWeb(query) {
+  const siteQuery = [
+    'site:skool.com',
+    'site:circle.so',
+    'site:mightynetworks.com',
+    'site:mn.co',
+    'site:facebook.com/groups',
+    'site:disboard.org',
+    'site:discord.gg'
+  ].join(' OR ');
+  const webResults = await searchWeb(`(${siteQuery}) ${query}`, { limit: 30 });
+  const results = [];
+
+  webResults.forEach((item, index) => {
+    const community = mapWebResultToCommunity(item, query, index);
+    if (community) results.push(community);
+  });
+
+  return results;
+}
+
+function mapWebResultToCommunity(item, query, index) {
+  const url = item.url;
+  if (!url || !isLikelyCommunityPage(url)) return null;
+
+  const title = cleanText(item.title);
+  if (!title) return null;
+
+  const description = cleanText(item.description);
+  if (!matchesQueryIntent(query, title, description, url)) return null;
+
+  const platform = identifyPlatform(url);
+  if (platform === 'Unknown' || platform === 'Web Forum' || platform === 'Reddit') return null;
+
+  const handleMatch = url.match(/\/@([^/?#]+)/i);
+  const handle = handleMatch ? `@${handleMatch[1]}` : '';
+  const cleanedName = title
+    .replace(/\s*[-|]\s*Threads.*$/i, '')
+    .replace(/\s*,\s*Say more\s*$/i, '')
+    .trim();
+  const isPost = /\/post\//i.test(url);
+  const parsedMembers = parseMemberCount(description) || parseMemberCount(title);
+
+  return {
+    id: `web-${platform}-${index}-${Date.now()}`,
+    name: cleanedName || handle || title,
+    title,
+    platform,
+    url,
+    description: description || `${platform} public ${isPost ? 'post' : 'profile'} for ${query}.`,
+    memberCount: parsedMembers || null,
+    activeCount: null,
+    isNsfw: false,
+    tags: [platform, isPost ? 'Post' : 'Profile'],
+    createdAt: new Date().toISOString(),
+    monetizationScore: 'Medium',
+    nicheSpecificity: calculateNicheSpecificity(cleanedName || handle, title, description)
+  };
 }
 
 function extractBalancedJson(text, key) {
@@ -391,48 +430,6 @@ async function searchViaCircleDiscovery(query) {
 
 // normalizeMojeekUrl removed — Mojeek no longer used
 
-function normalizeDuckDuckGoUrl(rawUrl) {
-  if (!rawUrl) return null;
-
-  try {
-    const parsed = new URL(rawUrl, 'https://duckduckgo.com');
-    if (parsed.hostname.includes('duckduckgo.com')) {
-      return parsed.searchParams.get('uddg') || null;
-    }
-    return parsed.href;
-  } catch {
-    return null;
-  }
-}
-
-async function fetchDuckDuckGoHtml(searchUrl) {
-  try {
-    const response = await axios.get(searchUrl, {
-      headers: {
-        'User-Agent': BROWSER_USER_AGENT,
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
-      },
-      timeout: 12000
-    });
-
-    if (response.data?.includes('web-result') || response.data?.includes('result__a')) {
-      return response.data;
-    }
-  } catch {
-    // DuckDuckGo often serves Axios a holding page. Fall back to curl below.
-  }
-
-  const curlBinary = process.platform === 'win32' ? 'curl.exe' : 'curl';
-  const { stdout } = await execFileAsync(
-    curlBinary,
-    ['-s', '-L', '--max-time', '20', '-A', BROWSER_USER_AGENT, searchUrl],
-    { maxBuffer: 1024 * 1024 }
-  );
-
-  return stdout;
-}
-
 function isLikelyCommunityPage(url) {
   const urlLower = url.toLowerCase();
 
@@ -459,6 +456,7 @@ function isLikelyCommunityPage(url) {
   if (urlLower.includes('discord.gg/') || urlLower.includes('discord.com/invite/')) return true;
   if (urlLower.includes('skool.com/')) return true;
   if (urlLower.includes('circle.so/')) return true;
+  if (urlLower.includes('mightynetworks.com/')) return true;
   if (urlLower.includes('.mn.co/')) return true;
 
   return false;
@@ -503,6 +501,7 @@ function matchesQueryIntent(query, ...values) {
 // searchViaMojeek removed — Mojeek no longer used
 
 async function searchViaDuckDuckGo(query, { siteFilter, defaultPlatform }) {
+  return [];
   const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(`${query} ${siteFilter}`)}`;
   const html = await fetchDuckDuckGoHtml(searchUrl);
   const $ = cheerio.load(html);
